@@ -5,8 +5,10 @@ import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.server.ResponseStatusException;
 import tn.esprit.examen.nomPrenomClasseExamen.entities.MonthlyFeatureSnapshot;
 import tn.esprit.examen.nomPrenomClasseExamen.entities.Sites;
 import tn.esprit.examen.nomPrenomClasseExamen.repositories.MonthlyFeatureSnapshotRepository;
@@ -144,9 +146,12 @@ public class MlPredictionService {
         ensureModelFresh();
         MonthlyFeatureSnapshot snapshot = snapshotRepository
                 .findBySiteIdSiteAndYearAndMonth(siteId, year, month)
-                .orElseThrow(() -> new RuntimeException(
-                        "No feature snapshot found for site " + siteId + " " + year + "-" + month
-                                + ". Run /api/ml/features/compute/" + year + "/" + month + " first."));
+                .orElseGet(() -> {
+                    log.info("No snapshot for site {} {}-{}, auto-computing...", siteId, year, month);
+                    Sites site = sitesRepository.findById(siteId)
+                            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Site not found: " + siteId));
+                    return aggregationService.computeForSite(site, year, month);
+                });
 
         Map<String, Object> features = toFeatureMap(snapshot);
         List<Map<String, Object>> history = getHistory(siteId, year, month);
@@ -185,9 +190,12 @@ public class MlPredictionService {
 
         MonthlyFeatureSnapshot snapshot = snapshotRepository
                 .findBySiteIdSiteAndYearAndMonth(siteId, year, month)
-                .orElseThrow(() -> new RuntimeException(
-                        "No feature snapshot found for site " + siteId + " " + year + "-" + month
-                                + ". Run /api/ml/features/compute/" + year + "/" + month + " first."));
+                .orElseGet(() -> {
+                    log.info("No snapshot for site {} {}-{}, auto-computing...", siteId, year, month);
+                    Sites site = sitesRepository.findById(siteId)
+                            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Site not found: " + siteId));
+                    return aggregationService.computeForSite(site, year, month);
+                });
 
         Map<String, Object> features = toFeatureMap(snapshot);
         List<Map<String, Object>> history = getHistory(siteId, year, month);
@@ -228,8 +236,12 @@ public class MlPredictionService {
     public Map<String, Object> explainCost(Long siteId, int year, int month) {
         MonthlyFeatureSnapshot snapshot = snapshotRepository
                 .findBySiteIdSiteAndYearAndMonth(siteId, year, month)
-                .orElseThrow(() -> new RuntimeException(
-                        "No feature snapshot for site " + siteId + " " + year + "-" + month));
+                .orElseGet(() -> {
+                    log.info("No snapshot for site {} {}-{}, auto-computing...", siteId, year, month);
+                    Sites site = sitesRepository.findById(siteId)
+                            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Site not found: " + siteId));
+                    return aggregationService.computeForSite(site, year, month);
+                });
 
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("features", toFeatureMap(snapshot));
@@ -247,8 +259,12 @@ public class MlPredictionService {
     public Map<String, Object> explainRisk(Long siteId, int year, int month) {
         MonthlyFeatureSnapshot snapshot = snapshotRepository
                 .findBySiteIdSiteAndYearAndMonth(siteId, year, month)
-                .orElseThrow(() -> new RuntimeException(
-                        "No feature snapshot for site " + siteId + " " + year + "-" + month));
+                .orElseGet(() -> {
+                    log.info("No snapshot for site {} {}-{}, auto-computing...", siteId, year, month);
+                    Sites site = sitesRepository.findById(siteId)
+                            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Site not found: " + siteId));
+                    return aggregationService.computeForSite(site, year, month);
+                });
 
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("features", toFeatureMap(snapshot));

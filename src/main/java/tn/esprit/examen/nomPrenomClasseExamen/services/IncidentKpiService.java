@@ -27,7 +27,7 @@ public class IncidentKpiService {
         LocalDate endDate = startDate.withDayOfMonth(startDate.lengthOfMonth());
         
         List<Incident> incidents = incidentRepository.findBySitesIdSiteAndDateBetween(
-            siteId, startDate, endDate);
+            siteId, toDate(startDate), toDate(endDate));
 
         return IncidentSeverityKpiDto.builder()
             .siteId(siteId)
@@ -53,7 +53,7 @@ public class IncidentKpiService {
         LocalDate endDate = startDate.withDayOfMonth(startDate.lengthOfMonth());
         
         List<Incident> incidents = incidentRepository.findBySitesIdSiteAndDateBetween(
-            siteId, startDate, endDate);
+            siteId, toDate(startDate), toDate(endDate));
 
         List<Incident> closedIncidents = incidents.stream()
             .filter(i -> i.getEtatIncident() == EtatIncident.CLOSED && i.getClosedDate() != null)
@@ -83,7 +83,7 @@ public class IncidentKpiService {
         LocalDate endDate = startDate.withDayOfMonth(startDate.lengthOfMonth());
         
         List<Incident> incidents = incidentRepository.findBySitesIdSiteAndDateBetween(
-            siteId, startDate, endDate);
+            siteId, toDate(startDate), toDate(endDate));
 
         List<Incident> incidentsWithCosts = incidents.stream()
             .filter(i -> i.getCostEstimated() != null || i.getCostReal() != null)
@@ -114,7 +114,7 @@ public class IncidentKpiService {
         LocalDate startDate = endDate.minusDays(days);
         
         List<Incident> incidents = incidentRepository.findBySitesIdSiteAndDateBetween(
-            siteId, startDate, endDate);
+            siteId, toDate(startDate), toDate(endDate));
 
         return IncidentRecurrenceKpiDto.builder()
             .siteId(siteId)
@@ -145,9 +145,9 @@ public class IncidentKpiService {
         LocalDate startDate90 = endDate.minusDays(90);
         
         List<Incident> incidentsLast30Days = incidentRepository.findBySitesIdSiteAndDateBetween(
-            siteId, startDate30, endDate);
+            siteId, toDate(startDate30), toDate(endDate));
         List<Incident> incidentsLast90Days = incidentRepository.findBySitesIdSiteAndDateBetween(
-            siteId, startDate90, endDate);
+            siteId, toDate(startDate90), toDate(endDate));
 
         Sites site = sitesRepository.findById(siteId)
             .orElseThrow(() -> new RuntimeException("Site not found"));
@@ -243,9 +243,9 @@ public class IncidentKpiService {
         LocalDate startDate90 = endDate.minusDays(90);
         
         List<Incident> incidentsLast30Days = incidentRepository.findByEquipementIdEquipementAndDateBetween(
-            equipmentId, startDate30, endDate);
+            equipmentId, toDate(startDate30), toDate(endDate));
         List<Incident> incidentsLast90Days = incidentRepository.findByEquipementIdEquipementAndDateBetween(
-            equipmentId, startDate90, endDate);
+            equipmentId, toDate(startDate90), toDate(endDate));
 
         Equipement equipment = equipementRepository.findById(equipmentId)
             .orElseThrow(() -> new RuntimeException("Equipment not found"));
@@ -587,9 +587,9 @@ public class IncidentKpiService {
         LocalDate previousStart = previousEnd.minusDays(days);
         
         List<Incident> currentPeriod = incidentRepository.findBySitesIdSiteAndDateBetween(
-            siteId, currentStart, currentEnd);
+            siteId, toDate(currentStart), toDate(currentEnd));
         List<Incident> previousPeriod = incidentRepository.findBySitesIdSiteAndDateBetween(
-            siteId, previousStart, previousEnd);
+            siteId, toDate(previousStart), toDate(previousEnd));
         
         if (previousPeriod.isEmpty()) return 0.0;
         return ((currentPeriod.size() - previousPeriod.size()) * 100.0) / previousPeriod.size();
@@ -681,5 +681,9 @@ public class IncidentKpiService {
         if (dataPoints >= 10) return 0.8;
         if (dataPoints >= 5) return 0.7;
         return 0.5;
+    }
+
+    private Date toDate(LocalDate localDate) {
+        return Date.from(localDate.atStartOfDay(ZoneId.systemDefault()).toInstant());
     }
 }

@@ -79,7 +79,7 @@ public class MonthlyFeatureAggregationService {
         String siteCurrency = site.getCurrencyCode();
 
         // ── Incidents ──────────────────────────────────────────
-        List<Incident> incidents = incidentRepository.findBySitesIdSiteAndDateBetween(site.getIdSite(), monthStart, monthEnd);
+        List<Incident> incidents = incidentRepository.findBySitesIdSiteAndDateBetween(site.getIdSite(), toDate(monthStart), toDate(monthEnd));
 
         int incidentCount = incidents.size();
         int criticalCount = (int) incidents.stream().filter(i -> i.getSeverityCode() == SeverityCode.CRITICAL).count();
@@ -280,7 +280,7 @@ public class MonthlyFeatureAggregationService {
 
         for (Equipement eq : equipment) {
             List<Incident> eqIncidents = incidentRepository
-                    .findByEquipementIdEquipementAndDateBetween(eq.getIdEquipement(), start, end);
+                    .findByEquipementIdEquipementAndDateBetween(eq.getIdEquipement(), toDate(start), toDate(end));
             double mtbf = eqIncidents.isEmpty() ? days : (double) days / eqIncidents.size();
             totalMtbf += mtbf;
             count++;
@@ -294,7 +294,7 @@ public class MonthlyFeatureAggregationService {
 
         for (Equipement eq : equipment) {
             List<Incident> eqIncidents = incidentRepository
-                    .findByEquipementIdEquipementAndDateBetween(eq.getIdEquipement(), start, end);
+                    .findByEquipementIdEquipementAndDateBetween(eq.getIdEquipement(), toDate(start), toDate(end));
             for (Incident inc : eqIncidents) {
                 if (inc.getEtatIncident() == EtatIncident.CLOSED && inc.getDate() != null && inc.getClosedDate() != null) {
                     long millis = inc.getClosedDate().getTime() - inc.getDate().getTime();

@@ -34,6 +34,7 @@ public class Equipement {
 
     @ManyToOne
     @JoinColumn(name = "site_id")
+    @JsonIgnoreProperties({"lincident", "equipements", "budgets", "manualExpenses"})
     private Sites site;
 
     @OneToMany(mappedBy = "equipement", cascade = CascadeType.ALL)

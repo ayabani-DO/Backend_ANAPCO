@@ -26,5 +26,7 @@ public interface MaintenanceRepository extends JpaRepository<Maintenance,Long> {
     List<Maintenance> findByEquipementIdEquipementAndTypeMaintenanceAndDateBetween(
             Long equipementId, TypeMaintenance type, Date startDate, Date endDate);
 
+    List<Maintenance> findByEquipementSiteIdSite(Long siteId);
+
     List<Maintenance> findByEquipementSiteIdSiteAndDateBetween(Long siteId, Date startDate, Date endDate);
 }

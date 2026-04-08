@@ -65,7 +65,7 @@ public class EquipmentRulServiceImpl implements EquipmentRulService {
 
         List<Incident> recentIncidents = incidentRepository
                 .findByEquipementIdEquipementAndDateBetween(
-                        equipment.getIdEquipement(), windowStart, today);
+                        equipment.getIdEquipement(), toDate(windowStart), endDate);
 
         List<Maintenance> recentMaintenances = maintenanceRepository
                 .findByEquipementIdEquipementAndTypeMaintenanceAndDateBetween(

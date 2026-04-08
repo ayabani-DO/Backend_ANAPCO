@@ -7,6 +7,7 @@ import org.springframework.stereotype.Repository;
 import tn.esprit.examen.nomPrenomClasseExamen.entities.Incident;
 
 import java.time.LocalDate;
+import java.util.Date;
 import java.util.List;
 
 @Repository
@@ -18,9 +19,9 @@ public interface IncidentRepository extends JpaRepository<Incident,Long> {
     
     List<Incident> findByEquipementCategorieNomEquiepment(String categorieNom);
     
-    List<Incident> findBySitesIdSiteAndDateBetween(Long siteId, LocalDate startDate, LocalDate endDate);
+    List<Incident> findBySitesIdSiteAndDateBetween(Long siteId, Date startDate, Date endDate);
     
-    List<Incident> findByEquipementIdEquipementAndDateBetween(Long equipmentId, LocalDate startDate, LocalDate endDate);
+    List<Incident> findByEquipementIdEquipementAndDateBetween(Long equipmentId, Date startDate, Date endDate);
 
     List<Incident> findByEquipementIdEquipement(Long equipmentId);
 }
