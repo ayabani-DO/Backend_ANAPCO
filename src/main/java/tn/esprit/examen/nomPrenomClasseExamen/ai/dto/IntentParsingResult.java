@@ -11,10 +11,16 @@ import lombok.Setter;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class IntentDetectionResult {
+public class IntentParsingResult {
 
     @Builder.Default
-    private DetectedIntent intent = DetectedIntent.UNKNOWN;
+    private AssistantIntent intent = AssistantIntent.UNKNOWN;
+
+    @Builder.Default
+    private AssistantLanguage language = AssistantLanguage.FR;
+
+    @Builder.Default
+    private Double confidence = 0.0;
 
     private Long siteId;
     private Integer year;
