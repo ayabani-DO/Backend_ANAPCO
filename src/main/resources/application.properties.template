@@ -9,19 +9,20 @@ spring.jpa.show-sql=true
 spring.jpa.hibernate.ddl-auto= update
 
 # JWT
-application.security.jwt.secret-key=QWxhZGRpbjpPcGVuU2VzYW1lQWxhZGRpbjpPcGVuU2VzYW1l
+application.security.jwt.secret-key=YOUR_JWT_SECRET_KEY_HERE
 application.security.jwt.expiration=86400000
 
 # Google OAuth2
-spring.security.oauth2.client.registration.google.client-id=245614197596-k976h4i3ohnfrvcnpf9rd5rg8iov2pq3.apps.googleusercontent.com
+spring.security.oauth2.client.registration.google.client-id=YOUR_GOOGLE_CLIENT_ID_HERE
+spring.security.oauth2.client.registration.google.client-secret=YOUR_GOOGLE_CLIENT_SECRET_HERE
 
 # Mailing
 application.mailing.frontend.activation-url=http://localhost:8089/auth/activate-account
 application.mailing.frontend.reset-password-url=http://localhost:8089/reset-password
 spring.mail.host=smtp.gmail.com
 spring.mail.port=587
-spring.mail.username=u5355560661@gmail.com
-spring.mail.password=aya bani
+spring.mail.username=your-email@gmail.com
+spring.mail.password=your-app-password
 spring.mail.properties.mail.smtp.auth=true
 spring.mail.properties.mail.smtp.starttls.enable=true
 spring.mail.default-encoding=UTF-8
@@ -30,8 +31,7 @@ spring.mail.default-encoding=UTF-8
 logging.level.root = info
 logging.pattern.console= %d{yyyy-MM-dd HH:mm:ss} -%level -%logger{60} %msg %n
 
-fixer.api.key=54a7ddbf8712b79a370bf602f91c78fd
-
+fixer.api.key=YOUR_FIXER_API_KEY_HERE
 
 # Open-Meteo
 weather.open-meteo.forecast-url=https://api.open-meteo.com/v1/forecast
@@ -39,7 +39,7 @@ weather.open-meteo.historical-url=https://archive-api.open-meteo.com/v1/archive
 weather.open-meteo.default-timezone=auto
 
 # EIA Oil Price API (free key: https://www.eia.gov/opendata/register.php)
-eia.api.key=T3OpiqHHVQ95OogG1sTZmYtP05ZwhSNP7gI4bvMW
+eia.api.key=YOUR_EIA_API_KEY_HERE
 eia.api.base-url=https://api.eia.gov/v2
 
 # Energy price derivation (gas from EIA Henry Hub, electricity = gas × multiplier)
@@ -50,9 +50,8 @@ energy.electricity-gas-multiplier=2.8
 ml.service.base-url=http://localhost:5001
 ml.auto-retrain-interval-minutes=60
 
-
 # Groq
-groq.api-key=${GROQ_API_KEY}
+groq.api-key=YOUR_GROQ_API_KEY_HERE
 groq.base-url=https://api.groq.com/openai/v1
 groq.intent-model=llama-3.1-8b-instant
 groq.answer-model=llama-3.3-70b-versatile
