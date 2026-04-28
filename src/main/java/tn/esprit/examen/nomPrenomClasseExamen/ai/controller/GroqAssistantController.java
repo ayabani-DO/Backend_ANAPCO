@@ -10,6 +10,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import tn.esprit.examen.nomPrenomClasseExamen.ai.dto.AskAssistantRequest;
 import tn.esprit.examen.nomPrenomClasseExamen.ai.dto.AssistantResponseDto;
+import tn.esprit.examen.nomPrenomClasseExamen.ai.dto.ChatRequest;
+import tn.esprit.examen.nomPrenomClasseExamen.ai.dto.ChatResponse;
 import tn.esprit.examen.nomPrenomClasseExamen.ai.service.GroqAssistantService;
 
 import java.util.Map;
@@ -21,6 +23,11 @@ import java.util.Map;
 public class GroqAssistantController {
 
     private final GroqAssistantService groqAssistantService;
+
+    @PostMapping("/chat")
+    public ChatResponse chat(@Valid @RequestBody ChatRequest request) {
+        return groqAssistantService.chat(request);
+    }
 
     @PostMapping("/ask")
     public AssistantResponseDto ask(@Valid @RequestBody AskAssistantRequest request) {

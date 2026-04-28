@@ -165,6 +165,11 @@ public class MlPredictionService {
             if (response != null && "OK".equals(response.get("status"))) {
                 @SuppressWarnings("unchecked")
                 List<Map<String, Object>> predictions = (List<Map<String, Object>>) response.get("predictions");
+                if (predictions == null && response.get("data") instanceof Map) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> data = (Map<String, Object>) response.get("data");
+                    predictions = (List<Map<String, Object>>) data.get("predictions");
+                }
                 if (predictions != null && !predictions.isEmpty()) {
                     Map<String, Object> pred = predictions.get(0);
                     return CostPredictionResult.builder()
@@ -209,6 +214,11 @@ public class MlPredictionService {
             if (response != null && "OK".equals(response.get("status"))) {
                 @SuppressWarnings("unchecked")
                 List<Map<String, Object>> predictions = (List<Map<String, Object>>) response.get("predictions");
+                if (predictions == null && response.get("data") instanceof Map) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> data = (Map<String, Object>) response.get("data");
+                    predictions = (List<Map<String, Object>>) data.get("predictions");
+                }
                 if (predictions != null && !predictions.isEmpty()) {
                     Map<String, Object> pred = predictions.get(0);
                     @SuppressWarnings("unchecked")

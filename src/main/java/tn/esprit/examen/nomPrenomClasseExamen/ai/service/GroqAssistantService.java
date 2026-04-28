@@ -10,6 +10,8 @@ import tn.esprit.examen.nomPrenomClasseExamen.ai.config.GroqProperties;
 import tn.esprit.examen.nomPrenomClasseExamen.ai.dto.AssistantIntent;
 import tn.esprit.examen.nomPrenomClasseExamen.ai.dto.AssistantLanguage;
 import tn.esprit.examen.nomPrenomClasseExamen.ai.dto.AssistantResponseDto;
+import tn.esprit.examen.nomPrenomClasseExamen.ai.dto.ChatRequest;
+import tn.esprit.examen.nomPrenomClasseExamen.ai.dto.ChatResponse;
 import tn.esprit.examen.nomPrenomClasseExamen.ai.dto.IntentParsingResult;
 import tn.esprit.examen.nomPrenomClasseExamen.ai.ml.MlAssistantClientService;
 import tn.esprit.examen.nomPrenomClasseExamen.ai.ml.MlContractDtos;
@@ -18,8 +20,10 @@ import tn.esprit.examen.nomPrenomClasseExamen.services.IncidentKpiService;
 import tn.esprit.examen.nomPrenomClasseExamen.weather.services.WeatherRiskService;
 
 import java.time.LocalDate;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 @Service
@@ -35,6 +39,50 @@ public class GroqAssistantService {
     private final FinanceKpiService financeKpiService;
     private final IncidentKpiService incidentKpiService;
     private final WeatherRiskService weatherRiskService;
+
+    public ChatResponse chat(ChatRequest request) {
+        IntentParsingResult parsed = intentParser.parse(request.getMessage());
+
+        if (request.getLanguage() != null) {
+            switch (request.getLanguage().toLowerCase(Locale.ROOT)) {
+                case "fr" -> parsed.setLanguage(AssistantLanguage.FR);
+                case "en" -> parsed.setLanguage(AssistantLanguage.EN);
+                case "ar" -> parsed.setLanguage(AssistantLanguage.AR);
+            }
+        }
+
+        Object dtoPayload = mapIntentToDto(parsed);
+        List<String> suggestions = buildSuggestions(parsed.getIntent(), parsed.getLanguage());
+        String naturalAnswer = buildNaturalAnswer(request.getMessage(), parsed, dtoPayload, suggestions);
+
+        String toolName = switch (parsed.getIntent()) {
+            case FINANCE_KPI -> "getFinanceKpi";
+            case INCIDENT_RISK -> "calculateSiteRiskScore";
+            case WEATHER_RISK -> "getWeatherRisk";
+            case ML_COST_FORECAST -> "predictCost";
+            case UNKNOWN -> "none";
+        };
+
+        Map<String, String> entities = new HashMap<>();
+        if (parsed.getSiteId() != null) entities.put("siteId", String.valueOf(parsed.getSiteId()));
+        if (parsed.getYear() != null) entities.put("year", String.valueOf(parsed.getYear()));
+        if (parsed.getMonth() != null) entities.put("month", String.valueOf(parsed.getMonth()));
+
+        return ChatResponse.builder()
+                .answer(naturalAnswer)
+                .detectedIntent(ChatResponse.IntentDetectionResult.builder()
+                        .intent(parsed.getIntent().name())
+                        .confidence(parsed.getConfidence())
+                        .entities(entities)
+                        .build())
+                .data(ChatResponse.AiToolResult.builder()
+                        .toolName(toolName)
+                        .payload(dtoPayload)
+                        .summary(toolName.equals("none") ? "No matching service" : "Data retrieved successfully")
+                        .build())
+                .suggestions(suggestions)
+                .build();
+    }
 
     public AssistantResponseDto ask(String question) {
         IntentParsingResult parsed = intentParser.parse(question);
