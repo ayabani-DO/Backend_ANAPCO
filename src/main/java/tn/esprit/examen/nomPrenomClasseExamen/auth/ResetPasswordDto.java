@@ -1,9 +1,17 @@
 package tn.esprit.examen.nomPrenomClasseExamen.auth;
 
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 
 public class ResetPasswordDto {
+    @Email
+    @NotBlank
     private String email;
+    @NotBlank
     private String currentPassword;
+    @NotBlank
+    @Size(min = 8)
     private String newPassword;
 
     public String getEmail() {

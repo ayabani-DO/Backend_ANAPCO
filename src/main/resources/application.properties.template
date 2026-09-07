@@ -2,27 +2,27 @@ spring.application.name=nomPrenomClasseExamen
 server.port=8089
 ### DATABASE ###
 spring.datasource.url=jdbc:mysql://localhost:3306/ETAP_DB?createDatabaseIfNotExist=true
-spring.datasource.username=root
-spring.datasource.password=
+spring.datasource.username=${DB_USERNAME:root}
+spring.datasource.password=${DB_PASSWORD:}
 ### JPA / HIBERNATE ###
 spring.jpa.show-sql=true
 spring.jpa.hibernate.ddl-auto= update
 
 # JWT
-application.security.jwt.secret-key=YOUR_JWT_SECRET_KEY_HERE
+# Base64-encoded signing key. Generate one, e.g.: openssl rand -base64 48
+application.security.jwt.secret-key=${JWT_SECRET}
 application.security.jwt.expiration=86400000
 
 # Google OAuth2
-spring.security.oauth2.client.registration.google.client-id=YOUR_GOOGLE_CLIENT_ID_HERE
-spring.security.oauth2.client.registration.google.client-secret=YOUR_GOOGLE_CLIENT_SECRET_HERE
+spring.security.oauth2.client.registration.google.client-id=${GOOGLE_CLIENT_ID}
 
 # Mailing
 application.mailing.frontend.activation-url=http://localhost:8089/auth/activate-account
 application.mailing.frontend.reset-password-url=http://localhost:8089/reset-password
 spring.mail.host=smtp.gmail.com
 spring.mail.port=587
-spring.mail.username=your-email@gmail.com
-spring.mail.password=your-app-password
+spring.mail.username=${MAIL_USERNAME}
+spring.mail.password=${MAIL_PASSWORD}
 spring.mail.properties.mail.smtp.auth=true
 spring.mail.properties.mail.smtp.starttls.enable=true
 spring.mail.default-encoding=UTF-8
@@ -31,15 +31,17 @@ spring.mail.default-encoding=UTF-8
 logging.level.root = info
 logging.pattern.console= %d{yyyy-MM-dd HH:mm:ss} -%level -%logger{60} %msg %n
 
-fixer.api.key=YOUR_FIXER_API_KEY_HERE
+# Fixer FX rates
+fixer.api.key=${FIXER_API_KEY}
+
 
 # Open-Meteo
 weather.open-meteo.forecast-url=https://api.open-meteo.com/v1/forecast
 weather.open-meteo.historical-url=https://archive-api.open-meteo.com/v1/archive
 weather.open-meteo.default-timezone=auto
 
-# EIA Oil Price API (free key: https://www.eia.gov/opendata/register.php)
-eia.api.key=YOUR_EIA_API_KEY_HERE
+# EIA Oil Price API (free key: https://www.eia.gov/opendata/register.php) - optional
+eia.api.key=${EIA_API_KEY:}
 eia.api.base-url=https://api.eia.gov/v2
 
 # Energy price derivation (gas from EIA Henry Hub, electricity = gas × multiplier)
@@ -50,8 +52,9 @@ energy.electricity-gas-multiplier=2.8
 ml.service.base-url=http://localhost:5001
 ml.auto-retrain-interval-minutes=60
 
+
 # Groq
-groq.api-key=YOUR_GROQ_API_KEY_HERE
+groq.api-key=${GROQ_API_KEY}
 groq.base-url=https://api.groq.com/openai/v1
 groq.intent-model=llama-3.1-8b-instant
 groq.answer-model=llama-3.3-70b-versatile

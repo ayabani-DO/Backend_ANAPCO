@@ -1,8 +1,8 @@
 package tn.esprit.examen.nomPrenomClasseExamen.controllers;
 
-
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import tn.esprit.examen.nomPrenomClasseExamen.entities.User;
 import tn.esprit.examen.nomPrenomClasseExamen.services.UserService;
@@ -14,12 +14,18 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/users")
+@PreAuthorize("hasAuthority('ADMIN')")
 public class UserController {
 
     private final UserService userService;
 
     public UserController(UserService userService) {
         this.userService = userService;
+    }
+
+    @GetMapping("/getAll")
+    public List<User> getAllUsers() {
+        return userService.getAllUsers();
     }
 
     @PostMapping("/{idUser}/assign-role")
@@ -31,8 +37,9 @@ public class UserController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
         }
     }
+
     @GetMapping("/getUserById/{idUser}")
-    public User getProfile(@PathVariable Long idUser){
+    public User getProfile(@PathVariable Long idUser) {
         return userService.getProfile(idUser);
     }
 
@@ -40,7 +47,6 @@ public class UserController {
     public List<User> getAllUsersExceptMe(@RequestParam Long currentUserId) {
         return userService.getAllUsersExcept(currentUserId);
     }
-
 
     @PostMapping("/{idUser}/assignAndReplaceRoleToUser")
     public ResponseEntity<String> assignAndReplaceRoleToUser(@PathVariable Long idUser, @RequestParam String roleName) {
@@ -52,10 +58,26 @@ public class UserController {
         }
     }
 
+    @DeleteMapping("/{idUser}/roles/{roleName}")
+    public ResponseEntity<String> removeRoleFromUser(@PathVariable Long idUser, @PathVariable String roleName) {
+        try {
+            userService.removeRoleFromUser(idUser, roleName);
+            return ResponseEntity.ok("Role '" + roleName + "' removed from user successfully.");
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        }
+    }
+
     @PutMapping("/{idUser}/ban")
     public ResponseEntity<String> banUser(@PathVariable Long idUser, @RequestParam boolean lockStatus) {
         userService.banUser(idUser, lockStatus);
         return ResponseEntity.ok("User account lock status updated");
+    }
+
+    @PutMapping("/{idUser}/enabled")
+    public ResponseEntity<String> setAccountEnabled(@PathVariable Long idUser, @RequestParam boolean enabled) {
+        userService.setAccountEnabled(idUser, enabled);
+        return ResponseEntity.ok("User account enabled status updated");
     }
 
     @PutMapping("/{idUser}/updateFullName")
@@ -86,6 +108,4 @@ public class UserController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
         }
     }
-
-
 }

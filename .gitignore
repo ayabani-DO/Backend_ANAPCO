@@ -40,3 +40,16 @@ build/
 .env.*.local
 application-local.properties
 application*.properties
+!application.properties.template
+
+### Logs ###
+*.log
+logs/
+
+### Database dumps ###
+*.sql.gz
+*.dump
+*.mwb.bak
+
+### Claude Code local settings ###
+.claude/settings.local.json

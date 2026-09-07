@@ -1,6 +1,5 @@
 package tn.esprit.examen.nomPrenomClasseExamen.auth;
 
-
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.mail.MessagingException;
 import jakarta.validation.Valid;
@@ -10,6 +9,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import tn.esprit.examen.nomPrenomClasseExamen.entities.User;
 import tn.esprit.examen.nomPrenomClasseExamen.repositories.UserRepository;
+import tn.esprit.examen.nomPrenomClasseExamen.security.SecurityRoles;
 
 import java.io.IOException;
 import java.security.GeneralSecurityException;
@@ -20,35 +20,33 @@ import java.util.Map;
 @RequestMapping("/auth")
 @Tag(name = "Authentication")
 @RequiredArgsConstructor
-
 public class AuthenticationController {
     private final AuthenticationService authService;
     private final UserRepository userRepository;
 
-
     @PostMapping("/Register")
     @ResponseStatus(HttpStatus.ACCEPTED)
     public ResponseEntity<?> register(@RequestBody @Valid RegistrationRequest request) throws MessagingException {
-        List<String> roles = List.of("USER");
+        List<String> roles = List.of(SecurityRoles.VIEWER);
         authService.register(request, roles);
         return ResponseEntity.accepted().build();
-
     }
+
     @PostMapping("/google")
     public ResponseEntity<AuthenficationResponse> authenticateWithGoogle(
-            @RequestParam String  googleToken
+            @RequestParam String googleToken
     ) throws IOException, GeneralSecurityException {
         return ResponseEntity.ok(authService.authenticateWithGoogle(googleToken));
     }
 
-
     @PostMapping("/authenticate")
     private ResponseEntity<AuthenficationResponse> authenticate(
             @RequestBody @Valid AuthenficationRequest request
-    ){
+    ) {
         return ResponseEntity.ok(authService.authenficate(request));
     }
-    @GetMapping("activate-account")
+
+    @GetMapping("/activate-account")
     public void confirm(
             @RequestParam String token
     ) throws MessagingException {
@@ -78,7 +76,7 @@ public class AuthenticationController {
     }
 
     @PostMapping("/update-password")
-    public ResponseEntity<?> resetPassword(@RequestBody ResetPasswordDto resetPasswordDto) {
+    public ResponseEntity<?> resetPassword(@RequestBody @Valid ResetPasswordDto resetPasswordDto) {
         try {
             User updatedUser = authService.updatePassword(resetPasswordDto);
             return ResponseEntity.ok(Map.of("message", "Password updated successfully"));
@@ -86,5 +84,4 @@ public class AuthenticationController {
             return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
         }
     }
-
 }

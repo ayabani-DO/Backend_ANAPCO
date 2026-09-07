@@ -1,13 +1,12 @@
 package tn.esprit.examen.nomPrenomClasseExamen.services;
 
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tn.esprit.examen.nomPrenomClasseExamen.entities.Role;
 import tn.esprit.examen.nomPrenomClasseExamen.repositories.RoleRepository;
 
 import java.util.List;
-import java.util.Optional;
+import java.util.Locale;
 
 @Service
 @Transactional
@@ -20,18 +19,24 @@ public class RoleService {
     }
 
     public Role getOrCreateRole(String name) {
-        return roleRepository.findByName(name)
+        String normalized = normalizeRoleName(name);
+        return roleRepository.findByName(normalized)
                 .orElseGet(() -> {
                     Role newRole = Role.builder()
-                            .name(name.toUpperCase()) // Store roles in uppercase for consistency
+                            .name(normalized)
                             .build();
                     return roleRepository.save(newRole);
                 });
     }
 
-    public List<Role> getRoles(){
+    public List<Role> getRoles() {
         return roleRepository.findAll();
     }
 
-
+    private String normalizeRoleName(String name) {
+        if (name == null || name.isBlank()) {
+            throw new IllegalArgumentException("Role name cannot be blank");
+        }
+        return name.trim().toUpperCase(Locale.ROOT);
+    }
 }

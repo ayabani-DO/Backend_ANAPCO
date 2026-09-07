@@ -2,13 +2,12 @@ package tn.esprit.examen.nomPrenomClasseExamen.services;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import tn.esprit.examen.nomPrenomClasseExamen.analytics.services.CurrencyConverter;
 import tn.esprit.examen.nomPrenomClasseExamen.dto.FinanceKpiDto;
 import tn.esprit.examen.nomPrenomClasseExamen.entities.BudgetMonthly;
-import tn.esprit.examen.nomPrenomClasseExamen.entities.FxRate;
 import tn.esprit.examen.nomPrenomClasseExamen.entities.ManualExpense;
 import tn.esprit.examen.nomPrenomClasseExamen.entities.Sites;
 import tn.esprit.examen.nomPrenomClasseExamen.repositories.BudgetMonthlyRepository;
-import tn.esprit.examen.nomPrenomClasseExamen.repositories.FxRateRepository;
 import tn.esprit.examen.nomPrenomClasseExamen.repositories.ManualExpenseRepository;
 import tn.esprit.examen.nomPrenomClasseExamen.repositories.SitesRepository;
 
@@ -23,7 +22,7 @@ public class FinanceKpiService {
     private final SitesRepository sitesRepository;
     private final BudgetMonthlyRepository budgetMonthlyRepository;
     private final ManualExpenseRepository manualExpenseRepository;
-    private final FxRateRepository fxRateRepository;
+    private final CurrencyConverter currencyConverter;
 // Always converts to EUR for standardization
     /* Budget:The planned/allocated amount for a site per month,
     Source: BudgetMonthly table - manually entered budget planning
@@ -67,10 +66,10 @@ public class FinanceKpiService {
         // 1. Get ALL expenses for Site X and time period (exp:between March 1-31)
         List<ManualExpense> expenses = manualExpenseRepository.findBySite_IdSiteAndDateBetween(siteId, start, end);
         // Calculate the budget in euros
-        double budgetEur = budget == null ? 0d : toEur(siteId, year, month, budget.getAmount(), budget.getCurrencyCode(), site.getCurrencyCode());
+        double budgetEur = budget == null ? 0d : currencyConverter.toEur(siteId, year, month, budget.getAmount(), budget.getCurrencyCode(), site.getCurrencyCode());
         // 2. Convert each expense to EUR and SUM them up
         double realEur = expenses.stream()
-                .mapToDouble(e -> toEur(siteId, year, month, e.getAmount(), e.getCurrencyCode(), site.getCurrencyCode()))
+                .mapToDouble(e -> currencyConverter.toEur(siteId, year, month, e.getAmount(), e.getCurrencyCode(), site.getCurrencyCode()))
                 .sum();
         // Calculate the variance between the budget and actual expenses
         double varianceEur = realEur - budgetEur;
@@ -97,32 +96,6 @@ public class FinanceKpiService {
                 .build();
     }
 
-    private double toEur(Long siteId, Integer year, Integer month, Double amount, String currencyCode, String siteCurrencyCode) {
-        if (amount == null) {
-            return 0d;
-        }
-
-        String effectiveCurrency = (currencyCode == null || currencyCode.isBlank()) ? siteCurrencyCode : currencyCode;
-        if (effectiveCurrency == null || effectiveCurrency.isBlank() || "EUR".equalsIgnoreCase(effectiveCurrency)) {
-            return amount;
-        }
-
-        FxRate fxRate = fxRateRepository.findByYearAndMonthAndFromCurrencyIgnoreCaseAndToCurrencyIgnoreCase(
-                        year,
-                        month,
-                        effectiveCurrency,
-                        "EUR"
-                )
-                .orElseThrow(() -> new RuntimeException(
-                        "FxRate not found for conversion " + effectiveCurrency + "->EUR (siteId=" + siteId + ", year=" + year + ", month=" + month + ")"
-                ));
-
-        if (fxRate.getRate() == null) {
-            throw new RuntimeException("FxRate.rate is null for conversion " + effectiveCurrency + "->EUR");
-        }
-
-        return amount * fxRate.getRate();
-    }
 //Called from getKpi() method:
 //The risk level helps managers quickly identify sites needing financial attention, regardless of whether they're over or under budget.
     private String riskLevel(double variancePercent) {//variancePercent (difference between real vs budget)

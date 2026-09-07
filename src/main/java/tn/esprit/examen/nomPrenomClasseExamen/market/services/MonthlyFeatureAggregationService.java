@@ -4,6 +4,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tn.esprit.examen.nomPrenomClasseExamen.analytics.services.CurrencyConverter;
+import tn.esprit.examen.nomPrenomClasseExamen.analytics.services.OperationalAnalyticsService;
 import tn.esprit.examen.nomPrenomClasseExamen.entities.*;
 import tn.esprit.examen.nomPrenomClasseExamen.repositories.*;
 import tn.esprit.examen.nomPrenomClasseExamen.weather.entities.RiskAssessment;
@@ -30,12 +32,13 @@ public class MonthlyFeatureAggregationService {
     private final ManualExpenseRepository manualExpenseRepository;
     private final BudgetMonthlyRepository budgetMonthlyRepository;
     private final EquipementRepository equipementRepository;
-    private final FxRateRepository fxRateRepository;
     private final OilPriceRecordRepository oilPriceRecordRepository;
     private final EnergyPriceRecordRepository energyPriceRecordRepository;
     private final RiskAssessmentRepository riskAssessmentRepository;
     private final WeatherAlertRepository weatherAlertRepository;
     private final MonthlyFeatureSnapshotRepository snapshotRepository;
+    private final OperationalAnalyticsService operationalAnalytics;
+    private final CurrencyConverter currencyConverter;
 
     /**
      * Compute and persist a MonthlyFeatureSnapshot for every active site for the given year/month.
@@ -78,12 +81,13 @@ public class MonthlyFeatureAggregationService {
 
         String siteCurrency = site.getCurrencyCode();
 
-        // ── Incidents ──────────────────────────────────────────
-        List<Incident> incidents = incidentRepository.findBySitesIdSiteAndDateBetween(site.getIdSite(), toDate(monthStart), toDate(monthEnd));
+        // ── Incidents (loaded and scored via the Analytics layer) ──
+        List<Incident> incidents = operationalAnalytics.siteIncidents(site.getIdSite(), year, month);
 
         int incidentCount = incidents.size();
-        int criticalCount = (int) incidents.stream().filter(i -> i.getSeverityCode() == SeverityCode.CRITICAL).count();
-        int highCount = (int) incidents.stream().filter(i -> i.getSeverityCode() == SeverityCode.HIGH).count();
+        int criticalCount = (int) operationalAnalytics.countBySeverity(incidents, SeverityCode.CRITICAL);
+        int highCount = (int) operationalAnalytics.countBySeverity(incidents, SeverityCode.HIGH);
+        // Kept local: this averages over non-null severities only (differs from severityIndex when nulls exist).
         double avgSeverity = incidents.stream()
                 .filter(i -> i.getSeverityCode() != null)
                 .mapToInt(i -> i.getSeverityCode().getWeight())
@@ -91,34 +95,34 @@ public class MonthlyFeatureAggregationService {
 
         double incidentCostEur = incidents.stream()
                 .filter(i -> i.getCostReal() != null)
-                .mapToDouble(i -> toEur(site.getIdSite(), year, month, i.getCostReal(), siteCurrency))
+                .mapToDouble(i -> currencyConverter.toEurOrRaw(year, month, i.getCostReal(), siteCurrency, null))
                 .sum();
 
-        // ── Maintenance ────────────────────────────────────────
-        List<Maintenance> maintenances = maintenanceRepository
-                .findByEquipementSiteIdSiteAndDateBetween(site.getIdSite(), dateStart, dateEnd);
+        // ── Maintenance (loaded and scored via the Analytics layer) ──
+        List<Maintenance> maintenances = operationalAnalytics.siteMaintenances(site.getIdSite(), year, month);
 
-        int preventiveCount = (int) maintenances.stream().filter(m -> m.getTypeMaintenance() == TypeMaintenance.PREVENTIVE).count();
-        int correctiveCount = (int) maintenances.stream().filter(m -> m.getTypeMaintenance() == TypeMaintenance.CORRECTIVE).count();
-        int inspectionCount = (int) maintenances.stream().filter(m -> m.getTypeMaintenance() == TypeMaintenance.INSPECTION).count();
+        int preventiveCount = (int) operationalAnalytics.countByType(maintenances, TypeMaintenance.PREVENTIVE);
+        int correctiveCount = (int) operationalAnalytics.countByType(maintenances, TypeMaintenance.CORRECTIVE);
+        int inspectionCount = (int) operationalAnalytics.countByType(maintenances, TypeMaintenance.INSPECTION);
         double correctivePreventiveRatio = preventiveCount == 0 ? correctiveCount : (double) correctiveCount / preventiveCount;
 
+        // Kept local: sums ALL maintenances with a real cost (not DONE-only) — feature-specific semantics.
         double maintenanceCostEur = maintenances.stream()
                 .filter(m -> m.getCostReal() != null)
-                .mapToDouble(m -> toEur(site.getIdSite(), year, month, m.getCostReal(), siteCurrency))
+                .mapToDouble(m -> currencyConverter.toEurOrRaw(year, month, m.getCostReal(), siteCurrency, null))
                 .sum();
 
         // ── Manual Expenses ────────────────────────────────────
         List<ManualExpense> expenses = manualExpenseRepository.findBySite_IdSiteAndDateBetween(site.getIdSite(), monthStart, monthEnd);
         double manualExpenseEur = expenses.stream()
-                .mapToDouble(e -> toEur(site.getIdSite(), year, month, e.getAmount(),
-                        e.getCurrencyCode() != null ? e.getCurrencyCode() : siteCurrency))
+                .mapToDouble(e -> currencyConverter.toEurOrRaw(year, month, e.getAmount(),
+                        e.getCurrencyCode() != null ? e.getCurrencyCode() : siteCurrency, null))
                 .sum();
 
         // ── Budget ─────────────────────────────────────────────
         BudgetMonthly budget = budgetMonthlyRepository.findBySite_IdSiteAndYearAndMonth(site.getIdSite(), year, month).orElse(null);
-        double budgetEur = budget == null ? 0.0 : toEur(site.getIdSite(), year, month, budget.getAmount(),
-                budget.getCurrencyCode() != null ? budget.getCurrencyCode() : siteCurrency);
+        double budgetEur = budget == null ? 0.0 : currencyConverter.toEurOrRaw(year, month, budget.getAmount(),
+                budget.getCurrencyCode() != null ? budget.getCurrencyCode() : siteCurrency, null);
 
         // ── Total cost & variance ──────────────────────────────
         double totalCostEur = round2(incidentCostEur + maintenanceCostEur + manualExpenseEur);
@@ -324,23 +328,6 @@ public class MonthlyFeatureAggregationService {
             case 9, 10, 11 -> 4; // Autumn
             default -> 0;
         };
-    }
-
-    private double toEur(Long siteId, int year, int month, Double amount, String currencyCode) {
-        if (amount == null) return 0.0;
-        if (currencyCode == null || currencyCode.isBlank() || "EUR".equalsIgnoreCase(currencyCode)) {
-            return amount;
-        }
-        try {
-            FxRate rate = fxRateRepository.findByYearAndMonthAndFromCurrencyIgnoreCaseAndToCurrencyIgnoreCase(
-                    year, month, currencyCode, "EUR").orElse(null);
-            if (rate != null && rate.getRate() != null) {
-                return amount * rate.getRate();
-            }
-        } catch (Exception e) {
-            log.warn("FxRate not found for {} -> EUR (site={}, {}-{}). Using raw amount.", currencyCode, siteId, year, month);
-        }
-        return amount;
     }
 
     private double round2(double v) {

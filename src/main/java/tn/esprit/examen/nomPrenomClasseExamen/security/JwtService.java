@@ -1,7 +1,5 @@
 package tn.esprit.examen.nomPrenomClasseExamen.security;
 
-
-
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.io.Decoders;
@@ -65,13 +63,13 @@ public class JwtService {
                 .map(GrantedAuthority::getAuthority)
                 .collect(Collectors.toList());
 
-        User user = userRepository.findByEmail(userDetails.getUsername())
+        User user = userRepository.findByEmailIgnoreCase(userDetails.getUsername())
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         Map<String, Object> claims = new HashMap<>(extraClaims);
         claims.put("roles", roles);
         claims.put("idUser", user.getIdUser());
-        claims.put("dateOfBirth",user.getDateOfBirth().toString());
+        claims.put("dateOfBirth", user.getDateOfBirth() == null ? null : user.getDateOfBirth().toString());
 
         return Jwts.builder()
                 .setClaims(claims)
@@ -81,7 +79,6 @@ public class JwtService {
                 .signWith(getSignInKey())
                 .compact();
     }
-
 
     public boolean isTokenValid(String token, UserDetails userDetails) {
         final String username = extractUsername(token);

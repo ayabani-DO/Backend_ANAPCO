@@ -1,7 +1,5 @@
 package tn.esprit.examen.nomPrenomClasseExamen.auth;
 
-
-
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
 import com.google.api.client.http.javanet.NetHttpTransport;
@@ -21,6 +19,7 @@ import tn.esprit.examen.nomPrenomClasseExamen.repositories.RoleRepository;
 import tn.esprit.examen.nomPrenomClasseExamen.repositories.TokenRepository;
 import tn.esprit.examen.nomPrenomClasseExamen.repositories.UserRepository;
 import tn.esprit.examen.nomPrenomClasseExamen.security.JwtService;
+import tn.esprit.examen.nomPrenomClasseExamen.security.SecurityRoles;
 import tn.esprit.examen.nomPrenomClasseExamen.services.EmailService;
 import tn.esprit.examen.nomPrenomClasseExamen.services.EmailTemplateName;
 
@@ -29,12 +28,17 @@ import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Collections;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
-
 public class AuthenticationService {
     private final RoleRepository role;
     private final PasswordEncoder passwordEncoder;
@@ -45,7 +49,7 @@ public class AuthenticationService {
     private String activationUrl;
     private final AuthenticationManager authenticationManager;
     private final JwtService jwtService;
-    @Value("245614197596-k976h4i3ohnfrvcnpf9rd5rg8iov2pq3.apps.googleusercontent.com")
+    @Value("${spring.security.oauth2.client.registration.google.client-id}")
     private String googleClientId;
     @Value("${application.mailing.frontend.reset-password-url}")
     private String resetPasswordUrl;
@@ -70,10 +74,9 @@ public class AuthenticationService {
 
         LocalDate defaultDateOfBirth = LocalDate.of(2000, 1, 1);
 
-        User user = userRepository.findByEmail(email)
+        User user = userRepository.findByEmailIgnoreCase(email)
                 .orElseGet(() -> {
-                    Role userRole = role.findByName("USER")
-                            .orElseThrow(() -> new IllegalStateException("ROLE_USER not found"));
+                    Role userRole = resolveDefaultRole();
 
                     User newUser = new User();
                     newUser.setFirstName(firstName);
@@ -110,10 +113,11 @@ public class AuthenticationService {
         return sb.toString();
     }
 
-
-
-
     public void register(RegistrationRequest request, List<String> roleNames) throws MessagingException {
+        if (userRepository.existsByEmailIgnoreCase(request.getEmail())) {
+            throw new IllegalArgumentException("Email already in use");
+        }
+
         List<Role> roles = roleNames.stream()
                 .map(roleName -> role.findByName(roleName.toUpperCase())
                         .orElseThrow(() -> new IllegalStateException("Role " + roleName + " was not initialized")))
@@ -133,7 +137,6 @@ public class AuthenticationService {
         sendValidationEmail(user);
     }
 
-
     private void sendValidationEmail(User user) throws MessagingException {
         var newToken = generateAndSaveActivationToken(user);
         emailService.SendEmail(
@@ -147,7 +150,7 @@ public class AuthenticationService {
     }
 
     private String generateAndSaveActivationToken(User user) {
-        String generatedToken =generateActivationCode(6);
+        String generatedToken = generateActivationCode(6);
         var token = Token.builder()
                 .token(generatedToken)
                 .createdAt(LocalDateTime.now())
@@ -155,7 +158,6 @@ public class AuthenticationService {
                 .user(user)
                 .build();
         tokenRepository.save(token);
-
         return generatedToken;
     }
 
@@ -163,13 +165,11 @@ public class AuthenticationService {
         String characters = "0123456789";
         StringBuilder codebuilder = new StringBuilder();
         SecureRandom secureRandom = new SecureRandom();
-        for (int i=0 ; i < length; i++){
+        for (int i = 0; i < length; i++) {
             int randomIndex = secureRandom.nextInt(characters.length());
             codebuilder.append(characters.charAt(randomIndex));
         }
         return codebuilder.toString();
-
-
     }
 
     public AuthenficationResponse authenficate(AuthenficationRequest request) {
@@ -178,32 +178,30 @@ public class AuthenticationService {
                         request.getEmail(), request.getPassword()
                 )
         );
-        var claims= new HashMap<String , Object>();
-        var user = ((User)auth.getPrincipal());
+        var claims = new HashMap<String, Object>();
+        var user = ((User) auth.getPrincipal());
         claims.put("fullName", user.FullName());
         claims.put("dateOfBirth", user.getDateOfBirth());
         var jwtToken = jwtService.generateToken(claims, user);
         return AuthenficationResponse.builder().token(jwtToken).build();
     }
 
-
     public void activateaccount(String token) throws MessagingException {
-        Token savedToken= tokenRepository.findByToken(token).orElseThrow(()-> new RuntimeException("Invalid Token"));
-        if (LocalDateTime.now().isAfter(savedToken.getExpiresAt())){
+        Token savedToken = tokenRepository.findByToken(token).orElseThrow(() -> new RuntimeException("Invalid Token"));
+        if (LocalDateTime.now().isAfter(savedToken.getExpiresAt())) {
             sendValidationEmail(savedToken.getUser());
             throw new RuntimeException("Activation Token Has Expired. A new Token has been send to the same email address");
-
         }
-        var user = userRepository.findById(savedToken.getUser().getIdUser()).orElseThrow(()-> new UsernameNotFoundException("User Not Found"));
+        var user = userRepository.findById(savedToken.getUser().getIdUser()).orElseThrow(() -> new UsernameNotFoundException("User Not Found"));
         user.setEnabled(true);
+        user.setAccountLocked(false);
         userRepository.save(user);
         savedToken.setValidatedAt(LocalDateTime.now());
         tokenRepository.save(savedToken);
-
     }
 
     public void forgotPassword(String email) throws MessagingException {
-        User user = userRepository.findByEmail(email)
+        User user = userRepository.findByEmailIgnoreCase(email)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found"));
 
         String resetToken = UUID.randomUUID().toString();
@@ -247,7 +245,7 @@ public class AuthenticationService {
     }
 
     public User updatePassword(ResetPasswordDto resetPasswordDto) {
-        User user = userRepository.findByEmail(resetPasswordDto.getEmail())
+        User user = userRepository.findByEmailIgnoreCase(resetPasswordDto.getEmail())
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         if (!passwordEncoder.matches(resetPasswordDto.getCurrentPassword(), user.getPassword())) {
@@ -258,6 +256,9 @@ public class AuthenticationService {
         return userRepository.save(user);
     }
 
-
-
+    private Role resolveDefaultRole() {
+        return role.findByName(SecurityRoles.VIEWER)
+                .orElseGet(() -> role.findByName("USER")
+                        .orElseThrow(() -> new IllegalStateException("Default role VIEWER not found")));
+    }
 }

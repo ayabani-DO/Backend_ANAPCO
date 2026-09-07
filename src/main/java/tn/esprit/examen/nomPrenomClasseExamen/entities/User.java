@@ -1,7 +1,6 @@
 package tn.esprit.examen.nomPrenomClasseExamen.entities;
 
-
-
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 import org.springframework.data.annotation.CreatedDate;
@@ -16,7 +15,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -28,8 +26,7 @@ import java.util.stream.Collectors;
 @AllArgsConstructor
 @ToString
 @EntityListeners(AuditingEntityListener.class)
-
-public class  User implements UserDetails, Principal {
+public class User implements UserDetails, Principal {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -40,6 +37,7 @@ public class  User implements UserDetails, Principal {
     private LocalDate dateOfBirth;
     @Column(unique = true)
     private String email;
+    @JsonIgnore
     private String password;
     private boolean accountLocked;
     private boolean enabled;
@@ -50,10 +48,6 @@ public class  User implements UserDetails, Principal {
     @Column(insertable = false)
     private LocalDateTime lastModifiedDate;
 
-
-
-
-
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
             name = "user_roles",
@@ -61,6 +55,7 @@ public class  User implements UserDetails, Principal {
             inverseJoinColumns = @JoinColumn(name = "role_id")
     )
     private Set<Role> roles = new HashSet<>();
+
     @Override
     public String getName() {
         return email;
@@ -104,7 +99,7 @@ public class  User implements UserDetails, Principal {
         return enabled;
     }
 
-    public String FullName(){
-        return firstName+" "+lastName ;
+    public String FullName() {
+        return firstName + " " + lastName;
     }
 }

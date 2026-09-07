@@ -15,8 +15,8 @@ import tn.esprit.examen.nomPrenomClasseExamen.ai.dto.ChatResponse;
 import tn.esprit.examen.nomPrenomClasseExamen.ai.dto.IntentParsingResult;
 import tn.esprit.examen.nomPrenomClasseExamen.ai.ml.MlAssistantClientService;
 import tn.esprit.examen.nomPrenomClasseExamen.ai.ml.MlContractDtos;
-import tn.esprit.examen.nomPrenomClasseExamen.services.FinanceKpiService;
-import tn.esprit.examen.nomPrenomClasseExamen.services.IncidentKpiService;
+import tn.esprit.examen.nomPrenomClasseExamen.analytics.services.FinancialAnalyticsService;
+import tn.esprit.examen.nomPrenomClasseExamen.analytics.services.OperationalAnalyticsService;
 import tn.esprit.examen.nomPrenomClasseExamen.weather.services.WeatherRiskService;
 
 import java.time.LocalDate;
@@ -36,8 +36,8 @@ public class GroqAssistantService {
     private final ObjectMapper objectMapper;
     private final AssistantIntentParser intentParser;
     private final MlAssistantClientService mlAssistantClientService;
-    private final FinanceKpiService financeKpiService;
-    private final IncidentKpiService incidentKpiService;
+    private final FinancialAnalyticsService financialAnalyticsService;
+    private final OperationalAnalyticsService operationalAnalyticsService;
     private final WeatherRiskService weatherRiskService;
 
     public ChatResponse chat(ChatRequest request) {
@@ -56,8 +56,8 @@ public class GroqAssistantService {
         String naturalAnswer = buildNaturalAnswer(request.getMessage(), parsed, dtoPayload, suggestions);
 
         String toolName = switch (parsed.getIntent()) {
-            case FINANCE_KPI -> "getFinanceKpi";
-            case INCIDENT_RISK -> "calculateSiteRiskScore";
+            case FINANCE_KPI -> "getFinancialAnalytics";
+            case INCIDENT_RISK -> "getOperationalAnalytics";
             case WEATHER_RISK -> "getWeatherRisk";
             case ML_COST_FORECAST -> "predictCost";
             case UNKNOWN -> "none";
@@ -115,8 +115,9 @@ public class GroqAssistantService {
         Integer month = parsed.getMonth() != null ? parsed.getMonth() : now.getMonthValue();
 
         return switch (parsed.getIntent()) {
-            case FINANCE_KPI -> financeKpiService.getKpi(siteId, year, month);
-            case INCIDENT_RISK -> incidentKpiService.calculateSiteRiskScore(siteId);
+            // Route through the Analytics layer so the assistant answers with the SAME numbers as the dashboard.
+            case FINANCE_KPI -> financialAnalyticsService.getFinancialKpi(siteId, year, month);
+            case INCIDENT_RISK -> operationalAnalyticsService.getOperationalKpi(siteId, year, month);
             case WEATHER_RISK -> weatherRiskService.getLatestAssessment(siteId);
             case ML_COST_FORECAST -> buildMlCostDto(siteId, year, month);
             case UNKNOWN -> Map.of(

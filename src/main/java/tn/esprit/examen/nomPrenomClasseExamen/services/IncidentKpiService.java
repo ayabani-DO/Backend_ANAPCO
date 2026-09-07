@@ -2,6 +2,7 @@ package tn.esprit.examen.nomPrenomClasseExamen.services;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import tn.esprit.examen.nomPrenomClasseExamen.analytics.services.OperationalAnalyticsService;
 import tn.esprit.examen.nomPrenomClasseExamen.dto.*;
 import tn.esprit.examen.nomPrenomClasseExamen.entities.*;
 import tn.esprit.examen.nomPrenomClasseExamen.repositories.*;
@@ -19,6 +20,7 @@ public class IncidentKpiService {
     private final IncidentRepository incidentRepository;
     private final SitesRepository sitesRepository;
     private final EquipementRepository equipementRepository;
+    private final OperationalAnalyticsService operationalAnalytics;
 
     // PHASE 1: CORE KPI METHODS =================================================
 
@@ -318,7 +320,8 @@ public class IncidentKpiService {
     // HELPER METHODS ===========================================================
 
     private Long countBySeverity(List<Incident> incidents, SeverityCode severity) {
-        return incidents.stream().filter(i -> i.getSeverityCode() == severity).count();
+        // Delegated to the Analytics layer (single source of truth); logic is identical.
+        return operationalAnalytics.countBySeverity(incidents, severity);
     }
 
     private Long countByStatus(List<Incident> incidents, EtatIncident status) {
@@ -331,11 +334,8 @@ public class IncidentKpiService {
     }
 
     private Double calculateSeverityIndex(List<Incident> incidents) {
-        if (incidents.isEmpty()) return 0.0;
-        double totalWeight = incidents.stream()
-            .mapToDouble(i -> i.getSeverityCode().getWeight())
-            .sum();
-        return totalWeight / incidents.size();
+        // Delegated to the Analytics layer (single source of truth); formula is identical.
+        return operationalAnalytics.severityIndex(incidents);
     }
 
     private Double calculateCriticalRatio(List<Incident> incidents) {

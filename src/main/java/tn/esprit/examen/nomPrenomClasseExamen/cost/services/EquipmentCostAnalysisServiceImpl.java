@@ -5,6 +5,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+import tn.esprit.examen.nomPrenomClasseExamen.analytics.services.OperationalAnalyticsService;
 import tn.esprit.examen.nomPrenomClasseExamen.cost.dto.CostCategory;
 import tn.esprit.examen.nomPrenomClasseExamen.cost.dto.EquipmentCostAnalysisDto;
 import tn.esprit.examen.nomPrenomClasseExamen.entities.Equipement;
@@ -32,6 +33,7 @@ public class EquipmentCostAnalysisServiceImpl implements EquipmentCostAnalysisSe
     private final EquipementRepository equipementRepository;
     private final IncidentRepository   incidentRepository;
     private final MaintenanceRepository maintenanceRepository;
+    private final OperationalAnalyticsService operationalAnalytics;
 
     @Override
     public EquipmentCostAnalysisDto computeCostAnalysis(Long equipmentId) {
@@ -95,8 +97,8 @@ public class EquipmentCostAnalysisServiceImpl implements EquipmentCostAnalysisSe
         List<Maintenance> maintenances = maintenanceRepository.findByEquipementIdEquipement(id);
 
         // ── Total costs ──────────────────────────────────────────────────────
-        double totalIncidentCost = sumCost(incidents.stream()
-                .map(Incident::getCostReal).collect(Collectors.toList()));
+        // Delegated to the Analytics layer (single source of truth); logic is identical.
+        double totalIncidentCost = operationalAnalytics.totalIncidentCost(incidents);
 
         // ── Only DONE maintenances have a realized cost ─────────────────────
         double preventiveCost = maintenances.stream()
@@ -118,10 +120,8 @@ public class EquipmentCostAnalysisServiceImpl implements EquipmentCostAnalysisSe
                 .mapToDouble(Maintenance::getCostReal).sum();
 
         // ── Planned cost = not yet realized (PLANNED status) ─────────────────
-        double plannedCost = maintenances.stream()
-                .filter(m -> m.getStatusMaintenance() == StatusMaintenace.PLANNED
-                        && m.getCostReal() != null)
-                .mapToDouble(Maintenance::getCostReal).sum();
+        // Delegated to the Analytics layer (single source of truth); logic is identical.
+        double plannedCost = operationalAnalytics.plannedMaintenanceCost(maintenances);
 
         double totalMaintenanceCost = preventiveCost + correctiveCost + inspectionCost;
         double totalCost            = totalIncidentCost + totalMaintenanceCost;
@@ -148,12 +148,10 @@ public class EquipmentCostAnalysisServiceImpl implements EquipmentCostAnalysisSe
         double ratio = correctiveCost > 0 ? preventiveCost / correctiveCost : 0.0;
 
         // ── Count by type (all statuses) ──────────────────────────────────────
-        int preventiveCount  = (int) maintenances.stream()
-                .filter(m -> m.getTypeMaintenance() == TypeMaintenance.PREVENTIVE).count();
-        int correctiveCount  = (int) maintenances.stream()
-                .filter(m -> m.getTypeMaintenance() == TypeMaintenance.CORRECTIVE).count();
-        int inspectionCount  = (int) maintenances.stream()
-                .filter(m -> m.getTypeMaintenance() == TypeMaintenance.INSPECTION).count();
+        // Delegated to the Analytics layer (single source of truth); counts are identical.
+        int preventiveCount  = (int) operationalAnalytics.countByType(maintenances, TypeMaintenance.PREVENTIVE);
+        int correctiveCount  = (int) operationalAnalytics.countByType(maintenances, TypeMaintenance.CORRECTIVE);
+        int inspectionCount  = (int) operationalAnalytics.countByType(maintenances, TypeMaintenance.INSPECTION);
         int totalTypeCount   = preventiveCount + correctiveCount + inspectionCount;
 
         double preventivePct  = totalTypeCount > 0 ? (preventiveCount  * 100.0) / totalTypeCount : 0.0;

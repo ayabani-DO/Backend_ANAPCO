@@ -5,6 +5,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+import tn.esprit.examen.nomPrenomClasseExamen.analytics.services.OperationalAnalyticsService;
 import tn.esprit.examen.nomPrenomClasseExamen.entities.*;
 import tn.esprit.examen.nomPrenomClasseExamen.entities.TypeMaintenance;
 import tn.esprit.examen.nomPrenomClasseExamen.repositories.EquipementRepository;
@@ -31,6 +32,7 @@ public class EquipmentRulServiceImpl implements EquipmentRulService {
     private final EquipementRepository equipementRepository;
     private final IncidentRepository incidentRepository;
     private final MaintenanceRepository maintenanceRepository;
+    private final OperationalAnalyticsService operationalAnalytics;
 
     @Override
     public EquipmentRulDto computeRul(Long equipmentId) {
@@ -193,31 +195,14 @@ public class EquipmentRulServiceImpl implements EquipmentRulService {
     }
 
     private double computeMtbf(List<Incident> incidents) {
-        if (incidents.isEmpty()) {
-            return ANALYSIS_DAYS;
-        }
-        return (double) ANALYSIS_DAYS / incidents.size();
+        // Delegated to the Analytics layer (single source of truth); formula is identical
+        // (window / incident count over the RUL 90-day window).
+        return operationalAnalytics.averageMtbf(incidents.size(), ANALYSIS_DAYS);
     }
 
     private double computeMttr(List<Incident> incidents) {
-        List<Incident> closed = incidents.stream()
-                .filter(i -> i.getEtatIncident() == EtatIncident.CLOSED
-                        && i.getDate() != null
-                        && i.getClosedDate() != null)
-                .collect(Collectors.toList());
-
-        if (closed.isEmpty()) {
-            return 0.0;
-        }
-
-        double totalDays = closed.stream()
-                .mapToDouble(i -> {
-                    long millis = i.getClosedDate().getTime() - i.getDate().getTime();
-                    return millis / (1000.0 * 60 * 60 * 24);
-                })
-                .sum();
-
-        return totalDays / closed.size();
+        // Delegated to the Analytics layer (single source of truth); formula is identical.
+        return operationalAnalytics.averageMttr(incidents);
     }
 
     private double computeAvgCost(List<Incident> incidents, List<Maintenance> maintenances) {
