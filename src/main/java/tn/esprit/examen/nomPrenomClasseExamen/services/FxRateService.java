@@ -162,6 +162,20 @@ public class FxRateService {
 
     // ==================== CONVERSION METHOD ====================
 
+    /**
+     * Canonical currency-conversion arithmetic for the whole backend.
+     *
+     * <p>Storage convention: rows are Fixer-native — {@code fromCurrency = EUR}, {@code toCurrency = X},
+     * {@code rate = units of X per 1 EUR}. All directions pivot through EUR:
+     * <ul>
+     *   <li>{@code EUR → X}   = {@code amount × rate(EUR→X)}</li>
+     *   <li>{@code X → EUR}   = {@code amount ÷ rate(EUR→X)}</li>
+     *   <li>{@code X → Y}     = {@code amount ÷ rate(EUR→X) × rate(EUR→Y)}</li>
+     * </ul>
+     * Uses the rate for the exact {@code year}/{@code month} requested; there is currently no
+     * historical "nearest earlier rate" fallback (no repository method for it) — a missing rate
+     * throws {@link RuntimeException}.
+     */
     public Double convert(Double amount, String from, String to, Integer year, Integer month) {
         if (amount == null) {
             throw new IllegalArgumentException("Amount cannot be null");
@@ -178,41 +192,28 @@ public class FxRateService {
         if (fromCurrency.equals(toCurrency)) {
             return amount;
         }
-
         if (EUR.equals(fromCurrency)) {
-            // EUR -> TO: direct multiplication
-            FxRate toRate = fxRateRepository
-                    .findByYearAndMonthAndFromCurrencyIgnoreCaseAndToCurrencyIgnoreCase(
-                            year, month, EUR, toCurrency
-                    )
-                    .orElseThrow(() -> new RuntimeException("Missing FX rate for " + toCurrency));
-            return amount * toRate.getRate();
+            return amount * eurRate(toCurrency, year, month);
         }
-
         if (EUR.equals(toCurrency)) {
-            // FROM -> EUR: divide by EUR->FROM rate
-            FxRate fromRate = fxRateRepository
-                    .findByYearAndMonthAndFromCurrencyIgnoreCaseAndToCurrencyIgnoreCase(
-                            year, month, EUR, fromCurrency
-                    )
-                    .orElseThrow(() -> new RuntimeException("Missing FX rate for " + fromCurrency));
-            return amount / fromRate.getRate();
+            return amount / eurRate(fromCurrency, year, month);
         }
-
         // FROM -> EUR -> TO: cross conversion via EUR
-        FxRate fromRate = fxRateRepository
-                .findByYearAndMonthAndFromCurrencyIgnoreCaseAndToCurrencyIgnoreCase(
-                        year, month, EUR, fromCurrency
-                )
-                .orElseThrow(() -> new RuntimeException("Missing FX rate for " + fromCurrency));
+        double amountInEur = amount / eurRate(fromCurrency, year, month);
+        return amountInEur * eurRate(toCurrency, year, month);
+    }
 
-        FxRate toRate = fxRateRepository
-                .findByYearAndMonthAndFromCurrencyIgnoreCaseAndToCurrencyIgnoreCase(
-                        year, month, EUR, toCurrency
-                )
-                .orElseThrow(() -> new RuntimeException("Missing FX rate for " + toCurrency));
-
-        double amountInEur = amount / fromRate.getRate();
-        return amountInEur * toRate.getRate();
+    /** {@code EUR -> currency} rate (units of {@code currency} per 1 EUR) for the given month. */
+    private double eurRate(String currency, int year, int month) {
+        FxRate fx = fxRateRepository
+                .findByYearAndMonthAndFromCurrencyIgnoreCaseAndToCurrencyIgnoreCase(year, month, EUR, currency)
+                .orElseThrow(() -> new RuntimeException(
+                        "Missing FX rate for EUR->" + currency + " (" + year + "-" + month + ")"));
+        Double rate = fx.getRate();
+        if (rate == null || rate == 0d) {
+            throw new RuntimeException("FX rate for EUR->" + currency + " (" + year + "-" + month + ") is "
+                    + (rate == null ? "null" : "zero"));
+        }
+        return rate;
     }
 }

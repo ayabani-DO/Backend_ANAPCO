@@ -3,15 +3,18 @@ package tn.esprit.examen.nomPrenomClasseExamen.analytics.services;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tn.esprit.examen.nomPrenomClasseExamen.analytics.dto.OperationalCostBreakdown;
 import tn.esprit.examen.nomPrenomClasseExamen.analytics.dto.OperationalKpiDTO;
 import tn.esprit.examen.nomPrenomClasseExamen.entities.EtatIncident;
 import tn.esprit.examen.nomPrenomClasseExamen.entities.Incident;
 import tn.esprit.examen.nomPrenomClasseExamen.entities.Maintenance;
 import tn.esprit.examen.nomPrenomClasseExamen.entities.SeverityCode;
+import tn.esprit.examen.nomPrenomClasseExamen.entities.Sites;
 import tn.esprit.examen.nomPrenomClasseExamen.entities.StatusMaintenace;
 import tn.esprit.examen.nomPrenomClasseExamen.entities.TypeMaintenance;
 import tn.esprit.examen.nomPrenomClasseExamen.repositories.IncidentRepository;
 import tn.esprit.examen.nomPrenomClasseExamen.repositories.MaintenanceRepository;
+import tn.esprit.examen.nomPrenomClasseExamen.repositories.SitesRepository;
 
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -22,22 +25,23 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * Analytics Layer — single source of truth for a site's operational health (incidents + maintenance).
+ * Analytics Layer — single source of truth for a site's operational health (incidents + maintenance)
+ * <b>and the canonical owner of the {@code operationalCost} subtotal</b>.
  *
- * <p>It centralises calculations that were previously duplicated (with divergent formulas) across
- * {@code IncidentKpiService}, {@code EquipmentCostAnalysisServiceImpl}, {@code EquipmentRulServiceImpl}
- * and {@code MonthlyFeatureAggregationService}. The Decision, AI and Chatbot layers are meant to
- * consume this service instead of re-reading the repositories.
- *
- * <p>The primitive calculators are kept {@code public} so downstream layers can reuse the exact same
- * numbers. Formulas mirror the existing production code so the consolidated figures stay consistent
- * with the legacy endpoints:
+ * <p>Canonical cost definitions (see {@link #operationalCost(Long, int, int)}):
  * <ul>
- *   <li>severity index = weighted mean of {@link SeverityCode#getWeight()} (from IncidentKpiService)</li>
- *   <li>MTTR = mean resolution time of CLOSED incidents in days (IncidentKpiService / RUL engine)</li>
- *   <li>MTBF = window length / incident count at site level (canonical, from the RUL engine intent)</li>
- *   <li>maintenance cost = realised (DONE) maintenance cost (EquipmentCostAnalysis semantics)</li>
+ *   <li>{@code incidentRealCost}        = Σ {@code Incident.costReal} in the period</li>
+ *   <li>{@code realisedMaintenanceCost} = Σ {@code Maintenance.costReal} where status == DONE</li>
+ *   <li>{@code plannedMaintenanceCost}  = Σ {@code Maintenance.costReal} where status ∈ {PLANNED, IN_PROGRESS}</li>
+ *   <li>{@code operationalCost}         = incidentRealCost + realisedMaintenanceCost
+ *       (planned maintenance is <b>never</b> part of it)</li>
  * </ul>
+ * All of the above are normalised to the reporting currency (via {@link CurrencyConverter}); the
+ * Financial layer consumes this subtotal and adds manual expenses to build {@code totalRealCost}.
+ * This service does <b>not</b> aggregate {@code ManualExpense}.
+ *
+ * <p>The list-based primitive calculators stay {@code public} and currency-agnostic (raw
+ * {@code costReal} sums) so equipment-level callers share the exact same definitions.
  */
 @Service
 @RequiredArgsConstructor
@@ -48,9 +52,13 @@ public class OperationalAnalyticsService {
 
     private final IncidentRepository incidentRepository;
     private final MaintenanceRepository maintenanceRepository;
+    private final SitesRepository sitesRepository;
+    private final CurrencyConverter currencyConverter;
 
     /**
-     * Consolidated operational KPIs for one site and one month.
+     * Consolidated operational KPIs for one site and one month. Cost fields are normalised to the
+     * reporting currency; {@code fxComplete}/{@code fxUnavailable} disclose any line that could not
+     * be converted.
      */
     public OperationalKpiDTO getOperationalKpi(Long siteId, int year, int month) {
         LocalDate monthStart = LocalDate.of(year, month, 1);
@@ -62,8 +70,8 @@ public class OperationalAnalyticsService {
         List<Maintenance> maintenances = maintenanceRepository.findByEquipementSiteIdSiteAndDateBetween(
                 siteId, toDate(monthStart), toDate(monthEnd));
 
-        double incidentCost = totalIncidentCost(incidents);
-        double maintenanceCost = realisedMaintenanceCost(maintenances);
+        OperationalCostBreakdown cost = operationalCost(siteId, year, month, incidents, maintenances);
+
         double mttr = averageMttr(incidents);
         double mtbf = averageMtbf(incidents.size(), windowDays);
 
@@ -76,9 +84,18 @@ public class OperationalAnalyticsService {
                 .preventiveCount(countByType(maintenances, TypeMaintenance.PREVENTIVE))
                 .correctiveCount(countByType(maintenances, TypeMaintenance.CORRECTIVE))
                 .inspectionCount(countByType(maintenances, TypeMaintenance.INSPECTION))
-                .incidentCost(round2(incidentCost))
-                .maintenanceCost(round2(maintenanceCost))
-                .totalOperationalCost(round2(incidentCost + maintenanceCost))
+                // ── Canonical cost fields (reporting currency) ──
+                .currency(cost.currency())
+                .incidentRealCost(cost.incidentRealCost())
+                .realisedMaintenanceCost(cost.realisedMaintenanceCost())
+                .plannedMaintenanceCost(cost.plannedMaintenanceCost())
+                .operationalCost(cost.operationalCost())
+                .fxComplete(cost.fxComplete())
+                .fxUnavailable(cost.fxUnavailable())
+                // ── Legacy aliases (kept for compatibility; now in reporting currency) ──
+                .incidentCost(cost.incidentRealCost())
+                .maintenanceCost(cost.realisedMaintenanceCost())
+                .totalOperationalCost(cost.operationalCost())
                 .averageMTTR(round2(mttr))
                 .averageMTBF(round2(mtbf))
                 .severityIndex(round2(severityIndex(incidents)))
@@ -88,7 +105,42 @@ public class OperationalAnalyticsService {
                 .build();
     }
 
-    // ── Public primitive calculators (reused by Decision / AI / Chatbot layers) ──
+    // ── Canonical operational cost subtotal (normalised) ──────────────────────
+
+    /** Canonical operational cost subtotal for a site/month, normalised to the reporting currency. */
+    public OperationalCostBreakdown operationalCost(Long siteId, int year, int month) {
+        LocalDate start = LocalDate.of(year, month, 1);
+        LocalDate end = start.with(TemporalAdjusters.lastDayOfMonth());
+        List<Incident> incidents = incidentRepository.findBySitesIdSiteAndDateBetween(siteId, toDate(start), toDate(end));
+        List<Maintenance> maintenances = maintenanceRepository.findByEquipementSiteIdSiteAndDateBetween(
+                siteId, toDate(start), toDate(end));
+        return operationalCost(siteId, year, month, incidents, maintenances);
+    }
+
+    private OperationalCostBreakdown operationalCost(Long siteId, int year, int month,
+                                                    List<Incident> incidents, List<Maintenance> maintenances) {
+        String siteCurrency = sitesRepository.findById(siteId)
+                .map(Sites::getCurrencyCode)
+                .orElse(null);
+
+        // Costs for a single site/month are all in one currency (there is no per-record currency on
+        // Incident/Maintenance), so converting each subtotal once at the period's own month is exact.
+        ReportingAmount incidentReal = new ReportingAmount()
+                .add(currencyConverter.convert(totalIncidentCost(incidents), siteCurrency, year, month), year, month);
+        ReportingAmount realisedMaint = new ReportingAmount()
+                .add(currencyConverter.convert(realisedMaintenanceCost(maintenances), siteCurrency, year, month), year, month);
+        ReportingAmount plannedMaint = new ReportingAmount()
+                .add(currencyConverter.convert(plannedMaintenanceCost(maintenances), siteCurrency, year, month), year, month);
+
+        ReportingAmount all = new ReportingAmount().merge(incidentReal).merge(realisedMaint).merge(plannedMaint);
+        double operationalCost = round2(incidentReal.total() + realisedMaint.total());
+
+        return new OperationalCostBreakdown(
+                incidentReal.total(), realisedMaint.total(), plannedMaint.total(), operationalCost,
+                currencyConverter.reportingCurrency(), all.complete(), all.gaps());
+    }
+
+    // ── Public primitive calculators (currency-agnostic; reused by equipment-level callers) ──
 
     public long countBySeverity(List<Incident> incidents, SeverityCode severity) {
         return incidents.stream().filter(i -> i.getSeverityCode() == severity).count();
@@ -147,6 +199,7 @@ public class OperationalAnalyticsService {
         return (mtbf / denominator) * 100.0;
     }
 
+    /** Raw Σ {@code Incident.costReal} (site-local currency). */
     public double totalIncidentCost(List<Incident> incidents) {
         return incidents.stream()
                 .filter(i -> i.getCostReal() != null)
@@ -154,7 +207,7 @@ public class OperationalAnalyticsService {
                 .sum();
     }
 
-    /** Realised maintenance cost = DONE maintenances that carry a real cost. */
+    /** Raw realised maintenance cost = DONE maintenances that carry a real cost (site-local currency). */
     public double realisedMaintenanceCost(List<Maintenance> maintenances) {
         return maintenances.stream()
                 .filter(m -> m.getStatusMaintenance() == StatusMaintenace.DONE && m.getCostReal() != null)
@@ -162,12 +215,50 @@ public class OperationalAnalyticsService {
                 .sum();
     }
 
-    /** Planned (not-yet-realised) maintenance cost = PLANNED maintenances that carry a cost. */
+    /**
+     * Raw planned (not-yet-realised) maintenance cost = maintenances that carry a cost and whose
+     * status is PLANNED or IN_PROGRESS (site-local currency).
+     *
+     * <p>IN_PROGRESS is folded in here as "committed but not realised" — it is future spend, so it
+     * must not land in {@code operationalCost}/{@code realisedMaintenanceCost}. Previously
+     * IN_PROGRESS was silently dropped by every calculator.
+     */
     public double plannedMaintenanceCost(List<Maintenance> maintenances) {
         return maintenances.stream()
-                .filter(m -> m.getStatusMaintenance() == StatusMaintenace.PLANNED && m.getCostReal() != null)
+                .filter(m -> (m.getStatusMaintenance() == StatusMaintenace.PLANNED
+                        || m.getStatusMaintenance() == StatusMaintenace.IN_PROGRESS)
+                        && m.getCostReal() != null)
                 .mapToDouble(Maintenance::getCostReal)
                 .sum();
+    }
+
+    /** Canonical raw operational cost subtotal = incident real + realised maintenance (site-local currency). */
+    public double operationalCost(List<Incident> incidents, List<Maintenance> maintenances) {
+        return totalIncidentCost(incidents) + realisedMaintenanceCost(maintenances);
+    }
+
+    /**
+     * Raw (site-local) operational cost per calendar month of a year — index 1..12.
+     * {@code operationalCost = Σ Incident.costReal + Σ DONE Maintenance.costReal} in each month.
+     * Consumed by the Financial layer to build a {@code totalRealCost}-based cost trend.
+     */
+    public double[] rawOperationalCostByMonth(Long siteId, int year) {
+        double[] perMonth = new double[13];
+        LocalDate start = LocalDate.of(year, 1, 1);
+        LocalDate end = LocalDate.of(year, 12, 31);
+
+        for (Incident i : incidentRepository.findBySitesIdSiteAndDateBetween(siteId, toDate(start), toDate(end))) {
+            if (i.getCostReal() != null && i.getDate() != null) {
+                perMonth[monthOf(i.getDate())] += i.getCostReal();
+            }
+        }
+        for (Maintenance m : maintenanceRepository.findByEquipementSiteIdSiteAndDateBetween(
+                siteId, toDate(start), toDate(end))) {
+            if (m.getStatusMaintenance() == StatusMaintenace.DONE && m.getCostReal() != null && m.getDate() != null) {
+                perMonth[monthOf(m.getDate())] += m.getCostReal();
+            }
+        }
+        return perMonth;
     }
 
     /** Incidents recorded for a whole site within a given month (canonical operational data source). */
@@ -215,5 +306,9 @@ public class OperationalAnalyticsService {
 
     private Date toDate(LocalDate localDate) {
         return Date.from(localDate.atStartOfDay(ZoneId.systemDefault()).toInstant());
+    }
+
+    private int monthOf(Date date) {
+        return date.toInstant().atZone(ZoneId.systemDefault()).toLocalDate().getMonthValue();
     }
 }

@@ -17,11 +17,22 @@ public class EquipmentAnalyticsDTO {
     private Long equipmentId;
     private String equipmentName;
     private String siteName;
+    /** Site-local currency of the cost figures below (per-transaction FX normalisation is deferred). */
+    private String currency;
 
     /** 0..100, higher is healthier ({@code 100 - rulScore}). */
     private double healthScore;
 
-    /** Realised incident + realised maintenance + planned maintenance cost (all-time). */
+    // ── Canonical all-time cost breakdown ────────────────────
+    private double incidentRealCost;
+    private double realisedMaintenanceCost;
+    /** incidentRealCost + realisedMaintenanceCost. Planned maintenance is NOT included. */
+    private double operationalCost;
+    /** Future/committed = upcoming planned + in-progress maintenance. Reported separately. */
+    private double plannedMaintenanceCost;
+
+    /** @deprecated use {@link #operationalCost} — identical value (was incident + realised + planned before 1B). */
+    @Deprecated
     private double totalCost;
 
     private IncidentSummary incidentSummary;
@@ -33,7 +44,8 @@ public class EquipmentAnalyticsDTO {
 
     private String riskLevel;
 
-    /** Forward-looking committed cost = upcoming planned maintenance. */
+    /** @deprecated use {@link #plannedMaintenanceCost}. This is committed maintenance spend, not a forecast. */
+    @Deprecated
     private double forecastCost;
 
     public record IncidentSummary(long count, LocalDate lastDate, double avgSeverity) {

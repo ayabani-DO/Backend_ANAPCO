@@ -34,6 +34,11 @@ logging.pattern.console= %d{yyyy-MM-dd HH:mm:ss} -%level -%logger{60} %msg %n
 # Fixer FX rates
 fixer.api.key=${FIXER_API_KEY}
 
+# Reporting currency — every monetary value that is aggregated, compared, used as an
+# ML feature/target, or displayed together in DSS analytics is normalised to this.
+# EUR is the default and also the pivot currency the Fixer integration stores rates against.
+reporting.currency=EUR
+
 
 # Open-Meteo
 weather.open-meteo.forecast-url=https://api.open-meteo.com/v1/forecast

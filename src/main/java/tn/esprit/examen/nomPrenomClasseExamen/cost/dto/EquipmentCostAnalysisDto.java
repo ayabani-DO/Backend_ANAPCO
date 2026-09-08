@@ -12,12 +12,20 @@ public class EquipmentCostAnalysisDto {
     private String equipmentName;
     private String equipmentRef;
     private double totalIncidentCost;
+    /** Realised (DONE) maintenance cost — same canonical definition as the Analytics/Financial layers. */
     private double totalMaintenanceCost;
+    /** totalIncidentCost + totalMaintenanceCost (realised only). */
+    private double operationalCost;
+    /** @deprecated use {@link #operationalCost} — identical value. */
+    @Deprecated
     private double totalCost;
     private double preventiveMaintenanceCost;
     private double correctiveMaintenanceCost;
     private double inspectionMaintenanceCost;
+    /** Future/committed maintenance (PLANNED + IN_PROGRESS). Not part of realised cost. */
     private double plannedMaintenanceCost;
+    /** @deprecated committed total = operationalCost + plannedMaintenanceCost. Not a forecast. */
+    @Deprecated
     private double forecastTotalCost;
     private Map<String, Double> costBySeverity;
     private double averageCostPerIncident;

@@ -5,7 +5,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tn.esprit.examen.nomPrenomClasseExamen.analytics.services.CurrencyConverter;
+import tn.esprit.examen.nomPrenomClasseExamen.analytics.services.FxRateUnavailableException;
 import tn.esprit.examen.nomPrenomClasseExamen.analytics.services.OperationalAnalyticsService;
+import tn.esprit.examen.nomPrenomClasseExamen.analytics.services.ReportingAmount;
 import tn.esprit.examen.nomPrenomClasseExamen.entities.*;
 import tn.esprit.examen.nomPrenomClasseExamen.repositories.*;
 import tn.esprit.examen.nomPrenomClasseExamen.weather.entities.RiskAssessment;
@@ -49,13 +51,20 @@ public class MonthlyFeatureAggregationService {
                 .toList();
 
         List<MonthlyFeatureSnapshot> results = new ArrayList<>();
+        int skipped = 0;
         for (Sites site : activeSites) {
-            MonthlyFeatureSnapshot snapshot = computeForSite(site, year, month);
-            results.add(snapshot);
+            try {
+                results.add(computeForSite(site, year, month));
+            } catch (FxRateUnavailableException ex) {
+                // Never persist a partially-converted snapshot — skip this site, keep the batch going.
+                skipped++;
+                log.warn("Skipping snapshot for site {} ({}-{}): {}", site.getIdSite(), year, month, ex.getMessage());
+            }
         }
 
         backfillTargets();
-        log.info("Monthly feature aggregation complete for {}-{}: {} site snapshots", year, month, results.size());
+        log.info("Monthly feature aggregation for {}-{}: {} snapshots computed, {} skipped (FX incomplete)",
+                year, month, results.size(), skipped);
         return results;
     }
 
@@ -93,11 +102,6 @@ public class MonthlyFeatureAggregationService {
                 .mapToInt(i -> i.getSeverityCode().getWeight())
                 .average().orElse(0.0);
 
-        double incidentCostEur = incidents.stream()
-                .filter(i -> i.getCostReal() != null)
-                .mapToDouble(i -> currencyConverter.toEurOrRaw(year, month, i.getCostReal(), siteCurrency, null))
-                .sum();
-
         // ── Maintenance (loaded and scored via the Analytics layer) ──
         List<Maintenance> maintenances = operationalAnalytics.siteMaintenances(site.getIdSite(), year, month);
 
@@ -106,27 +110,56 @@ public class MonthlyFeatureAggregationService {
         int inspectionCount = (int) operationalAnalytics.countByType(maintenances, TypeMaintenance.INSPECTION);
         double correctivePreventiveRatio = preventiveCount == 0 ? correctiveCount : (double) correctiveCount / preventiveCount;
 
-        // Kept local: sums ALL maintenances with a real cost (not DONE-only) — feature-specific semantics.
-        double maintenanceCostEur = maintenances.stream()
-                .filter(m -> m.getCostReal() != null)
-                .mapToDouble(m -> currencyConverter.toEurOrRaw(year, month, m.getCostReal(), siteCurrency, null))
-                .sum();
+        // ── Canonical monetary components, each normalised to the reporting currency ──
+        // FX is per-record; a missing rate marks the snapshot incomplete and prevents persistence
+        // (never write a raw / mixed-currency amount into a *Eur column).
+        ReportingAmount incidentAcc = new ReportingAmount();
+        for (Incident i : incidents) {
+            if (i.getCostReal() != null) {
+                incidentAcc.add(currencyConverter.convert(i.getCostReal(), siteCurrency, year, month), year, month);
+            }
+        }
+        double incidentCostEur = incidentAcc.total();
+
+        // Realised (DONE) maintenance only — same canonical definition as the Financial/Analytics layer.
+        ReportingAmount maintAcc = new ReportingAmount();
+        for (Maintenance m : maintenances) {
+            if (m.getStatusMaintenance() == StatusMaintenace.DONE && m.getCostReal() != null) {
+                maintAcc.add(currencyConverter.convert(m.getCostReal(), siteCurrency, year, month), year, month);
+            }
+        }
+        double maintenanceCostEur = maintAcc.total();
 
         // ── Manual Expenses ────────────────────────────────────
         List<ManualExpense> expenses = manualExpenseRepository.findBySite_IdSiteAndDateBetween(site.getIdSite(), monthStart, monthEnd);
-        double manualExpenseEur = expenses.stream()
-                .mapToDouble(e -> currencyConverter.toEurOrRaw(year, month, e.getAmount(),
-                        e.getCurrencyCode() != null ? e.getCurrencyCode() : siteCurrency, null))
-                .sum();
+        ReportingAmount manualAcc = new ReportingAmount();
+        for (ManualExpense e : expenses) {
+            manualAcc.add(currencyConverter.convert(e.getAmount(),
+                    e.getCurrencyCode() != null ? e.getCurrencyCode() : siteCurrency, year, month), year, month);
+        }
+        double manualExpenseEur = manualAcc.total();
 
         // ── Budget ─────────────────────────────────────────────
         BudgetMonthly budget = budgetMonthlyRepository.findBySite_IdSiteAndYearAndMonth(site.getIdSite(), year, month).orElse(null);
-        double budgetEur = budget == null ? 0.0 : currencyConverter.toEurOrRaw(year, month, budget.getAmount(),
-                budget.getCurrencyCode() != null ? budget.getCurrencyCode() : siteCurrency, null);
+        ReportingAmount budgetAcc = new ReportingAmount();
+        if (budget != null) {
+            budgetAcc.add(currencyConverter.convert(budget.getAmount(),
+                    budget.getCurrencyCode() != null ? budget.getCurrencyCode() : siteCurrency, year, month), year, month);
+        }
+        double budgetEur = budgetAcc.total();
 
-        // ── Total cost & variance ──────────────────────────────
+        // ── Refuse to persist a partially-converted snapshot ──
+        ReportingAmount fx = new ReportingAmount()
+                .merge(incidentAcc).merge(maintAcc).merge(manualAcc).merge(budgetAcc);
+        if (!fx.complete()) {
+            throw new FxRateUnavailableException("Cannot compute MonthlyFeatureSnapshot for site "
+                    + site.getIdSite() + " " + year + "-" + month + ": FX conversion incomplete for "
+                    + fx.gaps());
+        }
+
+        // ── Total cost & variance (canonical: realised only, planned excluded) ──
         double totalCostEur = round2(incidentCostEur + maintenanceCostEur + manualExpenseEur);
-        double budgetVariancePct = budgetEur == 0 ? 0.0 : round2((totalCostEur - budgetEur) / budgetEur * 100.0);
+        Double budgetVariancePct = budgetEur == 0 ? null : round2((totalCostEur - budgetEur) / budgetEur * 100.0);
 
         // ── Previous month cost ────────────────────────────────
         LocalDate prevMonth = monthStart.minusMonths(1);
@@ -168,7 +201,8 @@ public class MonthlyFeatureAggregationService {
         int season = toSeason(month);
 
         // ── Risk class target (rule-based label) ───────────────
-        String riskClass = computeRiskClass(budgetVariancePct, criticalCount, correctivePreventiveRatio,
+        String riskClass = computeRiskClass(budgetVariancePct != null ? budgetVariancePct : 0.0,
+                criticalCount, correctivePreventiveRatio,
                 weatherRiskAvg != null ? weatherRiskAvg : 0.0);
 
         // ── Populate snapshot ──────────────────────────────────

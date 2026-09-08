@@ -119,13 +119,16 @@ public class EquipmentCostAnalysisServiceImpl implements EquipmentCostAnalysisSe
                         && m.getCostReal() != null)
                 .mapToDouble(Maintenance::getCostReal).sum();
 
-        // ── Planned cost = not yet realized (PLANNED status) ─────────────────
-        // Delegated to the Analytics layer (single source of truth); logic is identical.
+        // ── Planned cost = future/committed (PLANNED + IN_PROGRESS) ──────────
+        // Delegated to the Analytics layer (single source of truth).
         double plannedCost = operationalAnalytics.plannedMaintenanceCost(maintenances);
 
-        double totalMaintenanceCost = preventiveCost + correctiveCost + inspectionCost;
-        double totalCost            = totalIncidentCost + totalMaintenanceCost;
-        double forecastTotalCost    = totalCost + plannedCost;
+        // Realised maintenance + operational cost use the SAME canonical definition as
+        // EquipmentAnalyticsService / FinancialAnalyticsService (via the shared primitive).
+        double totalMaintenanceCost = operationalAnalytics.realisedMaintenanceCost(maintenances);
+        double operationalCost      = operationalAnalytics.operationalCost(incidents, maintenances);
+        double totalCost            = operationalCost;
+        double committedTotalCost   = totalCost + plannedCost;
 
         // ── Cost by severity ─────────────────────────────────────────────────
         Map<String, Double> costBySeverity = incidents.stream()
@@ -195,12 +198,13 @@ public class EquipmentCostAnalysisServiceImpl implements EquipmentCostAnalysisSe
                 .equipmentRef(equipment.getRefEquipement())
                 .totalIncidentCost(totalIncidentCost)
                 .totalMaintenanceCost(totalMaintenanceCost)
+                .operationalCost(operationalCost)
                 .totalCost(totalCost)
                 .preventiveMaintenanceCost(preventiveCost)
                 .correctiveMaintenanceCost(correctiveCost)
                 .inspectionMaintenanceCost(inspectionCost)
                 .plannedMaintenanceCost(plannedCost)
-                .forecastTotalCost(forecastTotalCost)
+                .forecastTotalCost(committedTotalCost)
                 .costBySeverity(costBySeverity)
                 .averageCostPerIncident(avgCostPerIncident)
                 .averageCostPerMaintenance(avgCostPerMaintenance)

@@ -72,7 +72,8 @@ public class EquipmentAnalyticsService {
         double incidentCost = operationalAnalytics.totalIncidentCost(incidents);
         double realisedMaintenanceCost = operationalAnalytics.realisedMaintenanceCost(maintenances);
         double plannedMaintenanceCost = operationalAnalytics.plannedMaintenanceCost(maintenances);
-        double totalCost = incidentCost + realisedMaintenanceCost + plannedMaintenanceCost;
+        // Canonical: realised only. Planned maintenance is future/committed spend, reported separately.
+        double operationalCost = operationalAnalytics.operationalCost(incidents, maintenances);
 
         // RUL engine already encapsulates incidents + maintenance degradation signals.
         EquipmentRulDto rul = rulService.computeRul(id);
@@ -93,8 +94,13 @@ public class EquipmentAnalyticsService {
                 .equipmentId(id)
                 .equipmentName(equipment.getNomEquipement())
                 .siteName(equipment.getSite() != null ? equipment.getSite().getNom() : null)
+                .currency(equipment.getSite() != null ? equipment.getSite().getCurrencyCode() : null)
                 .healthScore(round2(healthScore))
-                .totalCost(round2(totalCost))
+                .incidentRealCost(round2(incidentCost))
+                .realisedMaintenanceCost(round2(realisedMaintenanceCost))
+                .operationalCost(round2(operationalCost))
+                .plannedMaintenanceCost(round2(plannedMaintenanceCost))
+                .totalCost(round2(operationalCost))
                 .incidentSummary(incidentSummary)
                 .maintenanceSummary(maintenanceSummary)
                 .rulScore(rul.getRulScore())

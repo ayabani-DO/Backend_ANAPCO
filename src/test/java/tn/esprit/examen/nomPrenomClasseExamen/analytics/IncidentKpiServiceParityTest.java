@@ -14,7 +14,10 @@ import tn.esprit.examen.nomPrenomClasseExamen.entities.SeverityCode;
 import tn.esprit.examen.nomPrenomClasseExamen.repositories.EquipementRepository;
 import tn.esprit.examen.nomPrenomClasseExamen.repositories.IncidentRepository;
 import tn.esprit.examen.nomPrenomClasseExamen.repositories.MaintenanceRepository;
+import tn.esprit.examen.nomPrenomClasseExamen.analytics.services.CurrencyConverter;
+import tn.esprit.examen.nomPrenomClasseExamen.repositories.FxRateRepository;
 import tn.esprit.examen.nomPrenomClasseExamen.repositories.SitesRepository;
+import tn.esprit.examen.nomPrenomClasseExamen.services.FxRateService;
 import tn.esprit.examen.nomPrenomClasseExamen.services.IncidentKpiService;
 
 import java.time.ZoneId;
@@ -44,13 +47,16 @@ class IncidentKpiServiceParityTest {
     private EquipementRepository equipementRepository;
     @Mock
     private MaintenanceRepository maintenanceRepository;
+    @Mock
+    private FxRateRepository fxRateRepository;
 
     private IncidentKpiService service;
 
     @BeforeEach
     void setUp() {
-        OperationalAnalyticsService operational =
-                new OperationalAnalyticsService(incidentRepository, maintenanceRepository);
+        OperationalAnalyticsService operational = new OperationalAnalyticsService(
+                incidentRepository, maintenanceRepository, sitesRepository,
+                new CurrencyConverter(new FxRateService(fxRateRepository, null)));
         service = new IncidentKpiService(
                 incidentRepository, sitesRepository, equipementRepository, operational);
     }

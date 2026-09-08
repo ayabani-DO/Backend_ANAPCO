@@ -10,8 +10,8 @@ import java.util.List;
  * for incident + maintenance KPIs, produced by the Analytics Layer
  * ({@code OperationalAnalyticsService}).
  *
- * <p>Costs here are the raw realised amounts in the underlying records (no FX normalisation);
- * currency-normalised financial figures belong to the Financial Analytics layer.
+ * <p>Since 1B all cost fields are normalised to the reporting currency (see {@link #currency});
+ * {@link #fxComplete} / {@link #fxUnavailable} disclose any line that could not be converted.
  */
 @Data
 @Builder
@@ -30,9 +30,31 @@ public class OperationalKpiDTO {
     private long correctiveCount;
     private long inspectionCount;
 
-    // ── Realised operational cost ────────────────────────────
+    // ── Canonical cost fields (reporting currency) ───────────
+    /** Reporting currency all cost fields are expressed in. */
+    private String currency;
+    /** Σ Incident.costReal for the month. */
+    private double incidentRealCost;
+    /** Σ Maintenance.costReal where status == DONE. */
+    private double realisedMaintenanceCost;
+    /** Σ Maintenance.costReal where status ∈ {PLANNED, IN_PROGRESS} — future/committed, NOT spent. */
+    private double plannedMaintenanceCost;
+    /** incidentRealCost + realisedMaintenanceCost (planned maintenance is never included). */
+    private double operationalCost;
+    /** false when at least one line could not be converted to {@link #currency}. */
+    private boolean fxComplete;
+    /** Lines excluded from the totals above because their FX rate was unavailable. */
+    private List<FxGap> fxUnavailable;
+
+    // ── Realised operational cost — legacy aliases ───────────
+    /** @deprecated use {@link #incidentRealCost}. Now normalised to the reporting currency. */
+    @Deprecated
     private double incidentCost;
+    /** @deprecated use {@link #realisedMaintenanceCost}. Now normalised to the reporting currency. */
+    @Deprecated
     private double maintenanceCost;
+    /** @deprecated use {@link #operationalCost}. Now normalised to the reporting currency. */
+    @Deprecated
     private double totalOperationalCost;
 
     // ── Reliability ──────────────────────────────────────────

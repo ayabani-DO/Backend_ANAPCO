@@ -29,6 +29,7 @@ import tn.esprit.examen.nomPrenomClasseExamen.repositories.ManualExpenseReposito
 import tn.esprit.examen.nomPrenomClasseExamen.repositories.MonthlyFeatureSnapshotRepository;
 import tn.esprit.examen.nomPrenomClasseExamen.repositories.OilPriceRecordRepository;
 import tn.esprit.examen.nomPrenomClasseExamen.repositories.SitesRepository;
+import tn.esprit.examen.nomPrenomClasseExamen.services.FxRateService;
 import tn.esprit.examen.nomPrenomClasseExamen.weather.repositories.RiskAssessmentRepository;
 import tn.esprit.examen.nomPrenomClasseExamen.weather.repositories.WeatherAlertRepository;
 
@@ -68,9 +69,9 @@ class MonthlyFeatureAggregationParityTest {
 
     @BeforeEach
     void setUp() {
+        CurrencyConverter converter = new CurrencyConverter(new FxRateService(fxRateRepository, null));
         OperationalAnalyticsService operational =
-                new OperationalAnalyticsService(incidentRepository, maintenanceRepository);
-        CurrencyConverter converter = new CurrencyConverter(fxRateRepository);
+                new OperationalAnalyticsService(incidentRepository, maintenanceRepository, sitesRepository, converter);
         service = new MonthlyFeatureAggregationService(
                 sitesRepository, incidentRepository, maintenanceRepository, manualExpenseRepository,
                 budgetMonthlyRepository, equipementRepository, oilPriceRecordRepository,
@@ -138,12 +139,31 @@ class MonthlyFeatureAggregationParityTest {
         assertThat(snap.getPreventiveMaintenanceCount()).isEqualTo(1);
         assertThat(snap.getCorrectiveMaintenanceCount()).isEqualTo(1);
         assertThat(snap.getInspectionCount()).isZero();
-        assertThat(snap.getMaintenanceCostEur()).isEqualTo(500.0); // ALL statuses with a cost: 200 + 300
+        assertThat(snap.getMaintenanceCostEur()).isEqualTo(200.0); // realised (DONE) only: 200
         assertThat(snap.getManualExpenseEur()).isEqualTo(100.0);
         assertThat(snap.getBudgetEur()).isEqualTo(1000.0);
-        assertThat(snap.getTotalCostEur()).isEqualTo(2100.0);      // 1500 + 500 + 100
-        assertThat(snap.getBudgetVariancePct()).isEqualTo(110.0);  // (2100 - 1000) / 1000 * 100
+        assertThat(snap.getTotalCostEur()).isEqualTo(1800.0);      // 1500 + 200 + 100
+        assertThat(snap.getBudgetVariancePct()).isEqualTo(80.0);   // (1800 - 1000) / 1000 * 100
         assertThat(snap.getEquipmentCount()).isZero();
         assertThat(snap.getRiskClass()).isEqualTo("HIGH_RISK");
+    }
+
+    @Test
+    void snapshotIsNotPersistedWhenFxConversionIsIncomplete() {
+        Sites site = new Sites();
+        site.setIdSite(2L);
+        site.setCurrencyCode("GBP");           // no EUR->GBP rate stubbed → conversion fails
+        site.setCountryCode("GB");
+
+        when(incidentRepository.findBySitesIdSiteAndDateBetween(eq(2L), any(), any())).thenReturn(List.of(
+                incident(SeverityCode.CRITICAL, 1000.0, EtatIncident.OPEN, d(2024, 6, 1), null)));
+        when(maintenanceRepository.findByEquipementSiteIdSiteAndDateBetween(eq(2L), any(), any())).thenReturn(List.of());
+        when(manualExpenseRepository.findBySite_IdSiteAndDateBetween(eq(2L), any(), any())).thenReturn(List.of());
+        when(budgetMonthlyRepository.findBySite_IdSiteAndYearAndMonth(2L, 2024, 6)).thenReturn(Optional.empty());
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.computeForSite(site, 2024, 6))
+                .isInstanceOf(tn.esprit.examen.nomPrenomClasseExamen.analytics.services.FxRateUnavailableException.class);
+
+        org.mockito.Mockito.verify(snapshotRepository, org.mockito.Mockito.never()).save(org.mockito.ArgumentMatchers.any());
     }
 }

@@ -14,9 +14,13 @@ import tn.esprit.examen.nomPrenomClasseExamen.entities.Incident;
 import tn.esprit.examen.nomPrenomClasseExamen.entities.Maintenance;
 import tn.esprit.examen.nomPrenomClasseExamen.entities.StatusMaintenace;
 import tn.esprit.examen.nomPrenomClasseExamen.entities.TypeMaintenance;
+import tn.esprit.examen.nomPrenomClasseExamen.analytics.services.CurrencyConverter;
 import tn.esprit.examen.nomPrenomClasseExamen.repositories.EquipementRepository;
+import tn.esprit.examen.nomPrenomClasseExamen.repositories.FxRateRepository;
 import tn.esprit.examen.nomPrenomClasseExamen.repositories.IncidentRepository;
 import tn.esprit.examen.nomPrenomClasseExamen.repositories.MaintenanceRepository;
+import tn.esprit.examen.nomPrenomClasseExamen.repositories.SitesRepository;
+import tn.esprit.examen.nomPrenomClasseExamen.services.FxRateService;
 
 import java.util.List;
 import java.util.Optional;
@@ -37,13 +41,18 @@ class EquipmentCostAnalysisParityTest {
     private IncidentRepository incidentRepository;
     @Mock
     private MaintenanceRepository maintenanceRepository;
+    @Mock
+    private SitesRepository sitesRepository;
+    @Mock
+    private FxRateRepository fxRateRepository;
 
     private EquipmentCostAnalysisServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        OperationalAnalyticsService operational =
-                new OperationalAnalyticsService(incidentRepository, maintenanceRepository);
+        OperationalAnalyticsService operational = new OperationalAnalyticsService(
+                incidentRepository, maintenanceRepository, sitesRepository,
+                new CurrencyConverter(new FxRateService(fxRateRepository, null)));
         service = new EquipmentCostAnalysisServiceImpl(
                 equipementRepository, incidentRepository, maintenanceRepository, operational);
     }
@@ -80,10 +89,11 @@ class EquipmentCostAnalysisParityTest {
         EquipmentCostAnalysisDto dto = service.computeCostAnalysis(1L);
 
         assertThat(dto.getTotalIncidentCost()).isEqualTo(1500.0);
-        assertThat(dto.getTotalMaintenanceCost()).isEqualTo(500.0);   // DONE only: 200 + 300
-        assertThat(dto.getTotalCost()).isEqualTo(2000.0);
+        assertThat(dto.getTotalMaintenanceCost()).isEqualTo(500.0);   // realised (DONE) only: 200 + 300
+        assertThat(dto.getOperationalCost()).isEqualTo(2000.0);       // canonical: incident + realised maintenance
+        assertThat(dto.getTotalCost()).isEqualTo(2000.0);            // deprecated alias == operationalCost
         assertThat(dto.getPlannedMaintenanceCost()).isEqualTo(400.0);
-        assertThat(dto.getForecastTotalCost()).isEqualTo(2400.0);     // 2000 + 400
+        assertThat(dto.getForecastTotalCost()).isEqualTo(2400.0);     // committed = 2000 + 400 (deprecated name)
         assertThat(dto.getPreventiveCount()).isEqualTo(2);            // DONE + PLANNED
         assertThat(dto.getCorrectiveCount()).isEqualTo(1);
         assertThat(dto.getInspectionCount()).isZero();

@@ -17,11 +17,15 @@ import tn.esprit.examen.nomPrenomClasseExamen.entities.SeverityCode;
 import tn.esprit.examen.nomPrenomClasseExamen.entities.Sites;
 import tn.esprit.examen.nomPrenomClasseExamen.entities.StatusMaintenace;
 import tn.esprit.examen.nomPrenomClasseExamen.entities.TypeMaintenance;
+import tn.esprit.examen.nomPrenomClasseExamen.analytics.services.CurrencyConverter;
 import tn.esprit.examen.nomPrenomClasseExamen.repositories.EquipementRepository;
+import tn.esprit.examen.nomPrenomClasseExamen.repositories.FxRateRepository;
 import tn.esprit.examen.nomPrenomClasseExamen.repositories.IncidentRepository;
 import tn.esprit.examen.nomPrenomClasseExamen.repositories.MaintenanceRepository;
+import tn.esprit.examen.nomPrenomClasseExamen.repositories.SitesRepository;
 import tn.esprit.examen.nomPrenomClasseExamen.rul.dto.EquipmentRulDto;
 import tn.esprit.examen.nomPrenomClasseExamen.rul.services.EquipmentRulService;
+import tn.esprit.examen.nomPrenomClasseExamen.services.FxRateService;
 
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -46,14 +50,19 @@ class EquipmentAnalyticsServiceTest {
     @Mock
     private EquipementRepository equipementRepository;
     @Mock
+    private SitesRepository sitesRepository;
+    @Mock
+    private FxRateRepository fxRateRepository;
+    @Mock
     private EquipmentRulService rulService;
 
     private EquipmentAnalyticsService service;
 
     @BeforeEach
     void setUp() {
-        OperationalAnalyticsService operational =
-                new OperationalAnalyticsService(incidentRepository, maintenanceRepository);
+        OperationalAnalyticsService operational = new OperationalAnalyticsService(
+                incidentRepository, maintenanceRepository, sitesRepository,
+                new CurrencyConverter(new FxRateService(fxRateRepository, null)));
         service = new EquipmentAnalyticsService(equipementRepository, operational, rulService);
     }
 
@@ -113,8 +122,12 @@ class EquipmentAnalyticsServiceTest {
 
         assertThat(dto.getEquipmentName()).isEqualTo("Pump");
         assertThat(dto.getSiteName()).isEqualTo("Plant-A");
-        assertThat(dto.getTotalCost()).isEqualTo(2400.0);   // 1500 incident + 500 realised + 400 planned
-        assertThat(dto.getForecastCost()).isEqualTo(400.0); // planned only
+        assertThat(dto.getIncidentRealCost()).isEqualTo(1500.0);
+        assertThat(dto.getRealisedMaintenanceCost()).isEqualTo(500.0);
+        assertThat(dto.getOperationalCost()).isEqualTo(2000.0);        // 1500 incident + 500 realised (planned excluded)
+        assertThat(dto.getPlannedMaintenanceCost()).isEqualTo(400.0);
+        assertThat(dto.getTotalCost()).isEqualTo(2000.0);             // deprecated alias == operationalCost
+        assertThat(dto.getForecastCost()).isEqualTo(400.0);           // deprecated alias == plannedMaintenanceCost
         assertThat(dto.getRulScore()).isEqualTo(40);
         assertThat(dto.getRemainingDays()).isEqualTo(120);
         assertThat(dto.getRulAction()).isEqualTo("Monitor closely");
