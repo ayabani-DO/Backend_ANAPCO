@@ -27,10 +27,14 @@ public class UserService {
     }
 
     public void assignRoleToUser(Long idUser, String roleName) {
+        // Validate against the four fixed roles BEFORE any database lookup.
+        String normalizedRoleName = normalizeRoleName(roleName);
+
         User user = userRepository.findById(idUser)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        Role role = roleRepository.findByName(normalizeRoleName(roleName))
+        // Resolve an already-seeded role — never create one.
+        Role role = roleRepository.findByName(normalizedRoleName)
                 .orElseThrow(() -> new RuntimeException("Role not found"));
 
         boolean alreadyAssigned = user.getRoles().stream()
@@ -44,10 +48,14 @@ public class UserService {
     }
 
     public void assignAndReplaceRoleToUser(Long idUser, String roleName) {
+        // Validate against the four fixed roles BEFORE any database lookup.
+        String normalizedRoleName = normalizeRoleName(roleName);
+
         User user = userRepository.findById(idUser)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        Role role = roleRepository.findByName(normalizeRoleName(roleName))
+        // Resolve an already-seeded role — never create one.
+        Role role = roleRepository.findByName(normalizedRoleName)
                 .orElseThrow(() -> new RuntimeException("Role not found"));
 
         // Business guard: replacing all roles with a non-ADMIN role strips ADMIN privileges.
@@ -61,10 +69,11 @@ public class UserService {
     }
 
     public void removeRoleFromUser(Long idUser, String roleName) {
+        // Validate against the four fixed roles BEFORE any database lookup.
+        String normalizedRoleName = normalizeRoleName(roleName);
+
         User user = userRepository.findById(idUser)
                 .orElseThrow(() -> new RuntimeException("User not found"));
-
-        String normalizedRoleName = normalizeRoleName(roleName);
 
         // Business guard: never let the system (or the caller) drop the last ADMIN privilege.
         if (SecurityRoles.ADMIN.equals(normalizedRoleName) && hasAdminRole(user)) {
@@ -146,11 +155,23 @@ public class UserService {
         userRepository.save(user);
     }
 
+    /**
+     * Normalises and validates a requested role name against the four fixed ANAPCO roles
+     * ({@link SecurityRoles#ALL}) <b>before</b> any database lookup. An unknown value
+     * (legacy {@code USER}/{@code AGENTF}, {@code TEST}, {@code SUPERADMIN}, {@code manager}, …)
+     * is rejected with {@link IllegalArgumentException} → HTTP 400. This method never creates a
+     * role; assignment must resolve an already-seeded role row.
+     */
     private String normalizeRoleName(String roleName) {
         if (roleName == null || roleName.isBlank()) {
             throw new IllegalArgumentException("Role name cannot be blank");
         }
-        return roleName.trim().toUpperCase(Locale.ROOT);
+        String normalized = roleName.trim().toUpperCase(Locale.ROOT);
+        if (!SecurityRoles.ALL.contains(normalized)) {
+            throw new IllegalArgumentException(
+                    "Unknown role '" + roleName + "'. Allowed roles: " + SecurityRoles.ALL);
+        }
+        return normalized;
     }
 
     // ---------------------------------------------------------------------

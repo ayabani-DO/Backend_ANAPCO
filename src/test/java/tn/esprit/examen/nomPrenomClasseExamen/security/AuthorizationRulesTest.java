@@ -14,16 +14,25 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import org.springframework.data.jpa.mapping.JpaMetamodelMappingContext;
 
+import tn.esprit.examen.nomPrenomClasseExamen.controllers.ManualExpenseController;
 import tn.esprit.examen.nomPrenomClasseExamen.controllers.SiteController;
 import tn.esprit.examen.nomPrenomClasseExamen.controllers.UserController;
 import tn.esprit.examen.nomPrenomClasseExamen.entities.Sites;
+import tn.esprit.examen.nomPrenomClasseExamen.market.controllers.MlPredictionController;
+import tn.esprit.examen.nomPrenomClasseExamen.market.services.MlPredictionService;
 import tn.esprit.examen.nomPrenomClasseExamen.repositories.RoleRepository;
+import tn.esprit.examen.nomPrenomClasseExamen.services.ManualExpenseService;
 import tn.esprit.examen.nomPrenomClasseExamen.services.SiteService;
 import tn.esprit.examen.nomPrenomClasseExamen.services.UserService;
 
 import java.util.List;
+import java.util.Map;
 
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -34,7 +43,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * the authenticated principal and its authorities are injected by {@link WithMockUser}, so these
  * tests assert exactly what each role is allowed to do.
  */
-@WebMvcTest(controllers = {UserController.class, SiteController.class})
+@WebMvcTest(controllers = {UserController.class, SiteController.class,
+        ManualExpenseController.class, MlPredictionController.class})
 @Import({SecurityConfig.class, JwtFilter.class, RestAuthenticationEntryPoint.class, RestAccessDeniedHandler.class})
 class AuthorizationRulesTest {
 
@@ -61,6 +71,10 @@ class AuthorizationRulesTest {
     private UserService userService;
     @MockBean
     private SiteService siteService;
+    @MockBean
+    private ManualExpenseService manualExpenseService;
+    @MockBean
+    private MlPredictionService mlPredictionService;
 
     // ---- User administration: ADMIN only ----
 
@@ -82,6 +96,23 @@ class AuthorizationRulesTest {
     void viewer_cannotAssignRoles() throws Exception {
         mvc.perform(post("/users/1/assign-role").param("roleName", "ADMIN"))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(authorities = "ADMIN")
+    void admin_canAssignValidRole() throws Exception {
+        mvc.perform(post("/users/1/assign-role").param("roleName", "OPS_MANAGER"))
+                .andExpect(status().isOk());
+        verify(userService).assignRoleToUser(1L, "OPS_MANAGER");
+    }
+
+    @Test
+    @WithMockUser(authorities = "ADMIN")
+    void admin_assignInvalidRole_returns400() throws Exception {
+        doThrow(new IllegalArgumentException("Unknown role 'TEST'. Allowed roles: [ADMIN, OPS_MANAGER, FINANCE_CONTROLLER, VIEWER]"))
+                .when(userService).assignRoleToUser(eq(1L), eq("TEST"));
+        mvc.perform(post("/users/1/assign-role").param("roleName", "TEST"))
+                .andExpect(status().isBadRequest());
     }
 
     @Test
@@ -128,5 +159,88 @@ class AuthorizationRulesTest {
     @WithAnonymousUser
     void anonymous_isUnauthorizedOnSites() throws Exception {
         mvc.perform(get("/api/sites/getAllSites")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @WithMockUser(authorities = "OPS_MANAGER")
+    void opsManager_canReadSites() throws Exception {
+        when(siteService.getAllSites()).thenReturn(List.of());
+        mvc.perform(get("/api/sites/getAllSites")).andExpect(status().isOk());
+    }
+
+    @Test
+    @WithMockUser(authorities = "FINANCE_CONTROLLER")
+    void financeController_canReadSites() throws Exception {
+        when(siteService.getAllSites()).thenReturn(List.of());
+        mvc.perform(get("/api/sites/getAllSites")).andExpect(status().isOk());
+    }
+
+    @Test
+    @WithMockUser(authorities = "ADMIN")
+    void admin_canCreateSite() throws Exception {
+        when(siteService.createSite(org.mockito.ArgumentMatchers.any(Sites.class))).thenReturn(new Sites());
+        mvc.perform(post("/api/sites/createSite")
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isOk());
+    }
+
+    // ---- Finance writes: ADMIN + FINANCE_CONTROLLER only ----
+
+    @Test
+    @WithMockUser(authorities = "FINANCE_CONTROLLER")
+    void financeController_canDeleteManualExpense() throws Exception {
+        mvc.perform(delete("/api/finance/manual-expenses/delete/1")).andExpect(status().isOk());
+    }
+
+    @Test
+    @WithMockUser(authorities = "ADMIN")
+    void admin_canDeleteManualExpense() throws Exception {
+        mvc.perform(delete("/api/finance/manual-expenses/delete/1")).andExpect(status().isOk());
+    }
+
+    @Test
+    @WithMockUser(authorities = "OPS_MANAGER")
+    void opsManager_cannotDeleteManualExpense() throws Exception {
+        mvc.perform(delete("/api/finance/manual-expenses/delete/1")).andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(authorities = "VIEWER")
+    void viewer_cannotDeleteManualExpense() throws Exception {
+        mvc.perform(delete("/api/finance/manual-expenses/delete/1")).andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(authorities = "VIEWER")
+    void viewer_canReadManualExpenses() throws Exception {
+        when(manualExpenseService.getAll()).thenReturn(List.of());
+        mvc.perform(get("/api/finance/manual-expenses/getAll")).andExpect(status().isOk());
+    }
+
+    // ---- ML model training: ADMIN only ----
+
+    @Test
+    @WithMockUser(authorities = "ADMIN")
+    void admin_canTrainMlModels() throws Exception {
+        when(mlPredictionService.trainModels()).thenReturn(Map.of());
+        mvc.perform(post("/api/ml/train")).andExpect(status().isOk());
+    }
+
+    @Test
+    @WithMockUser(authorities = "OPS_MANAGER")
+    void opsManager_cannotTrainMlModels() throws Exception {
+        mvc.perform(post("/api/ml/train")).andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(authorities = "FINANCE_CONTROLLER")
+    void financeController_cannotTrainMlModels() throws Exception {
+        mvc.perform(post("/api/ml/train")).andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(authorities = "VIEWER")
+    void viewer_cannotTrainMlModels() throws Exception {
+        mvc.perform(post("/api/ml/train")).andExpect(status().isForbidden());
     }
 }

@@ -1,5 +1,6 @@
 package tn.esprit.examen.nomPrenomClasseExamen.controllers;
 
+import io.swagger.v3.oas.annotations.Parameter;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -17,6 +18,11 @@ import java.util.Map;
 @PreAuthorize("hasAuthority('ADMIN')")
 public class UserController {
 
+    /** The only role names accepted by the assignment endpoints; anything else returns 400. */
+    private static final String ALLOWED_ROLES_DOC =
+            "One of the four fixed ANAPCO roles: ADMIN, OPS_MANAGER, FINANCE_CONTROLLER, VIEWER. "
+                    + "Any other value returns 400. Roles are never created via the API.";
+
     private final UserService userService;
 
     public UserController(UserService userService) {
@@ -29,7 +35,9 @@ public class UserController {
     }
 
     @PostMapping("/{idUser}/assign-role")
-    public ResponseEntity<String> assignRoleToUser(@PathVariable Long idUser, @RequestParam String roleName) {
+    public ResponseEntity<String> assignRoleToUser(
+            @PathVariable Long idUser,
+            @Parameter(description = ALLOWED_ROLES_DOC) @RequestParam String roleName) {
         try {
             userService.assignRoleToUser(idUser, roleName);
             return ResponseEntity.ok("Role '" + roleName + "' assigned to user successfully.");
@@ -49,7 +57,9 @@ public class UserController {
     }
 
     @PostMapping("/{idUser}/assignAndReplaceRoleToUser")
-    public ResponseEntity<String> assignAndReplaceRoleToUser(@PathVariable Long idUser, @RequestParam String roleName) {
+    public ResponseEntity<String> assignAndReplaceRoleToUser(
+            @PathVariable Long idUser,
+            @Parameter(description = ALLOWED_ROLES_DOC) @RequestParam String roleName) {
         try {
             userService.assignAndReplaceRoleToUser(idUser, roleName);
             return ResponseEntity.ok("Role '" + roleName + "' assigned to user successfully.");
@@ -59,7 +69,9 @@ public class UserController {
     }
 
     @DeleteMapping("/{idUser}/roles/{roleName}")
-    public ResponseEntity<String> removeRoleFromUser(@PathVariable Long idUser, @PathVariable String roleName) {
+    public ResponseEntity<String> removeRoleFromUser(
+            @PathVariable Long idUser,
+            @Parameter(description = ALLOWED_ROLES_DOC) @PathVariable String roleName) {
         try {
             userService.removeRoleFromUser(idUser, roleName);
             return ResponseEntity.ok("Role '" + roleName + "' removed from user successfully.");

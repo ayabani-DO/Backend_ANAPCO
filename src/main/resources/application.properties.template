@@ -16,12 +16,22 @@ application.security.jwt.expiration=86400000
 # Google OAuth2
 spring.security.oauth2.client.registration.google.client-id=${GOOGLE_CLIENT_ID}
 
+# CORS — comma-separated list of allowed frontend origins (never "*", credentials are allowed)
+cors.allowed-origins=${CORS_ALLOWED_ORIGINS:http://localhost:4200}
+
 # Mailing
-application.mailing.frontend.activation-url=http://localhost:8089/auth/activate-account
-application.mailing.frontend.reset-password-url=http://localhost:8089/reset-password
+# Activation link base. Default hits the backend directly (GET /auth/activate-account?token=...).
+# Point it at the Angular activation page in production, e.g. http://localhost:4200/activate-account
+application.mailing.activation-url=${ACTIVATION_URL:http://localhost:8089/auth/activate-account}
+# Password-reset link base. This is a FRONTEND page that collects the new password and calls
+# POST /auth/reset-password. Angular must expose this route and read ?token=.
+application.mailing.reset-password-url=${RESET_PASSWORD_URL:http://localhost:4200/reset-password}
+# Sender address for outgoing mail. Leave blank to use spring.mail.username (must match it for Gmail).
+application.mailing.from=${MAIL_FROM:}
 spring.mail.host=smtp.gmail.com
 spring.mail.port=587
 spring.mail.username=${MAIL_USERNAME}
+# Gmail requires a 16-char App Password (account with 2FA), NOT the normal account password.
 spring.mail.password=${MAIL_PASSWORD}
 spring.mail.properties.mail.smtp.auth=true
 spring.mail.properties.mail.smtp.starttls.enable=true

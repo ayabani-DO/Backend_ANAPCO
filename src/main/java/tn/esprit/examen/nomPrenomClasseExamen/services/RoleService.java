@@ -6,10 +6,14 @@ import tn.esprit.examen.nomPrenomClasseExamen.entities.Role;
 import tn.esprit.examen.nomPrenomClasseExamen.repositories.RoleRepository;
 
 import java.util.List;
-import java.util.Locale;
 
+/**
+ * Read-only access to the fixed ANAPCO role reference data. Role definitions are seeded once on
+ * startup ({@code CommandLineRunner}) and are never created at runtime — there is deliberately no
+ * create/get-or-create method here.
+ */
 @Service
-@Transactional
+@Transactional(readOnly = true)
 public class RoleService {
 
     private final RoleRepository roleRepository;
@@ -18,25 +22,7 @@ public class RoleService {
         this.roleRepository = roleRepository;
     }
 
-    public Role getOrCreateRole(String name) {
-        String normalized = normalizeRoleName(name);
-        return roleRepository.findByName(normalized)
-                .orElseGet(() -> {
-                    Role newRole = Role.builder()
-                            .name(normalized)
-                            .build();
-                    return roleRepository.save(newRole);
-                });
-    }
-
     public List<Role> getRoles() {
         return roleRepository.findAll();
-    }
-
-    private String normalizeRoleName(String name) {
-        if (name == null || name.isBlank()) {
-            throw new IllegalArgumentException("Role name cannot be blank");
-        }
-        return name.trim().toUpperCase(Locale.ROOT);
     }
 }

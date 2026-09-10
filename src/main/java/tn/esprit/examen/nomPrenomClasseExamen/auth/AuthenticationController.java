@@ -6,8 +6,8 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
-import tn.esprit.examen.nomPrenomClasseExamen.entities.User;
 import tn.esprit.examen.nomPrenomClasseExamen.repositories.UserRepository;
 import tn.esprit.examen.nomPrenomClasseExamen.security.SecurityRoles;
 
@@ -24,12 +24,14 @@ public class AuthenticationController {
     private final AuthenticationService authService;
     private final UserRepository userRepository;
 
-    @PostMapping("/Register")
-    @ResponseStatus(HttpStatus.ACCEPTED)
-    public ResponseEntity<?> register(@RequestBody @Valid RegistrationRequest request) throws MessagingException {
+    @PostMapping("/register")
+    public ResponseEntity<Map<String, String>> register(@RequestBody @Valid RegistrationRequest request)
+            throws MessagingException {
         List<String> roles = List.of(SecurityRoles.VIEWER);
         authService.register(request, roles);
-        return ResponseEntity.accepted().build();
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(Map.of(
+                "status", "PENDING_ACTIVATION",
+                "message", "Registration accepted. Check your email for the activation link."));
     }
 
     @PostMapping("/google")
@@ -40,48 +42,44 @@ public class AuthenticationController {
     }
 
     @PostMapping("/authenticate")
-    private ResponseEntity<AuthenficationResponse> authenticate(
+    public ResponseEntity<AuthenficationResponse> authenticate(
             @RequestBody @Valid AuthenficationRequest request
     ) {
         return ResponseEntity.ok(authService.authenficate(request));
     }
 
     @GetMapping("/activate-account")
-    public void confirm(
-            @RequestParam String token
-    ) throws MessagingException {
+    public ResponseEntity<Map<String, String>> confirm(@RequestParam String token) {
         authService.activateaccount(token);
+        return ResponseEntity.ok(Map.of(
+                "status", "ACTIVATED",
+                "message", "Account activated. You can now log in."));
     }
 
     @PostMapping("/forgot-password")
-    public ResponseEntity<?> forgotPassword(@RequestParam String email) throws MessagingException {
+    public ResponseEntity<Map<String, String>> forgotPassword(@RequestParam String email)
+            throws MessagingException {
         authService.forgotPassword(email);
-        return ResponseEntity.ok("Password reset link sent to email");
+        // Identical response whether or not the email is registered — no account enumeration.
+        return ResponseEntity.ok(Map.of(
+                "message", "If an account exists for this email, a password reset link has been sent."));
     }
 
     @PostMapping("/reset-password")
-    public ResponseEntity<?> resetPassword(
+    public ResponseEntity<Map<String, String>> resetPassword(
             @RequestParam String token,
             @RequestParam String newPassword
     ) {
-        try {
-            authService.resetPassword(token, newPassword);
-            return ResponseEntity.ok().body(
-                    Map.of("message", "Password has been reset successfully")
-            );
-        } catch (RuntimeException e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(Map.of("message", e.getMessage()));
-        }
+        authService.resetPassword(token, newPassword);
+        return ResponseEntity.ok(Map.of("message", "Password has been reset successfully"));
     }
 
     @PostMapping("/update-password")
-    public ResponseEntity<?> resetPassword(@RequestBody @Valid ResetPasswordDto resetPasswordDto) {
-        try {
-            User updatedUser = authService.updatePassword(resetPasswordDto);
-            return ResponseEntity.ok(Map.of("message", "Password updated successfully"));
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
-        }
+    public ResponseEntity<Map<String, String>> updatePassword(
+            Authentication authentication,
+            @RequestBody @Valid ResetPasswordDto resetPasswordDto) {
+        // Target account is the JWT principal, never resetPasswordDto.getEmail().
+        authService.updatePassword(authentication.getName(), resetPasswordDto);
+        return ResponseEntity.ok(Map.of("message", "Password updated successfully"));
     }
 }

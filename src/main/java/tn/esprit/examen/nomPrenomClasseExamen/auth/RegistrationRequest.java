@@ -1,10 +1,11 @@
 package tn.esprit.examen.nomPrenomClasseExamen.auth;
 
 
-import jakarta.persistence.Column;
 import jakarta.validation.constraints.*;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.LocalDate;
@@ -12,7 +13,8 @@ import java.time.LocalDate;
 @Getter
 @Setter
 @Builder
-
+@NoArgsConstructor
+@AllArgsConstructor
 public class RegistrationRequest {
 
     @NotEmpty(message = "FirstName is mandatory")

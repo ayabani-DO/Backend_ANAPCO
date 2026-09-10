@@ -1,8 +1,6 @@
 package tn.esprit.examen.nomPrenomClasseExamen.controllers;
 
 
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import tn.esprit.examen.nomPrenomClasseExamen.entities.Role;
@@ -10,6 +8,11 @@ import tn.esprit.examen.nomPrenomClasseExamen.services.RoleService;
 
 import java.util.List;
 
+/**
+ * Read-only view of the four fixed ANAPCO business roles. Role definitions are fixed system
+ * reference data seeded once on startup — they are never created through the API. ADMIN manages
+ * <i>role assignments</i> to users via {@code /users/**}, not role definitions here.
+ */
 @RestController
 @RequestMapping("/roles")
 @PreAuthorize("hasAuthority('ADMIN')")
@@ -19,16 +22,6 @@ public class RoleController {
 
     public RoleController(RoleService roleService) {
         this.roleService = roleService;
-    }
-
-    @PostMapping("/add")
-    public ResponseEntity<String> addRole(@RequestParam String name) {
-        try {
-            Role newRole = roleService.getOrCreateRole(name);
-            return ResponseEntity.status(HttpStatus.CREATED).body("Role '" + newRole.getName() + "' added successfully.");
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
-        }
     }
 
     @GetMapping("/getRoles")

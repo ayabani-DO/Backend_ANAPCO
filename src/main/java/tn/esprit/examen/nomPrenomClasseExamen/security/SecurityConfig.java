@@ -72,11 +72,14 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(req -> req
+                        // ---- CORS preflight: always allowed ----
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+
                         // ---- Public endpoints (no authentication) ----
                         .requestMatchers(
+                                "/auth/register",
                                 "/auth/authenticate",
-                                "/auth/Register",
-                                "/auth/activate-account/**",
+                                "/auth/activate-account",
                                 "/auth/forgot-password",
                                 "/auth/reset-password",
                                 "/auth/google",
