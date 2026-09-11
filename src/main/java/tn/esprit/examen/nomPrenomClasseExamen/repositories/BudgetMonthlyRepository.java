@@ -12,4 +12,7 @@ public interface BudgetMonthlyRepository extends JpaRepository<BudgetMonthly, Lo
     List<BudgetMonthly> findBySite_IdSite(Long siteId);
 
     Optional<BudgetMonthly> findBySite_IdSiteAndYearAndMonth(Long siteId, Integer year, Integer month);
+
+    // STEP 2A — lightweight dependency check for the Site delete guard
+    boolean existsBySite_IdSite(Long siteId);
 }

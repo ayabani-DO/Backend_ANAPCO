@@ -13,10 +13,12 @@ import tn.esprit.examen.nomPrenomClasseExamen.ai.dto.AssistantResponseDto;
 import tn.esprit.examen.nomPrenomClasseExamen.ai.dto.ChatRequest;
 import tn.esprit.examen.nomPrenomClasseExamen.ai.dto.ChatResponse;
 import tn.esprit.examen.nomPrenomClasseExamen.ai.dto.IntentParsingResult;
+import tn.esprit.examen.nomPrenomClasseExamen.ai.exception.AssistantDependencyException;
 import tn.esprit.examen.nomPrenomClasseExamen.ai.ml.MlAssistantClientService;
 import tn.esprit.examen.nomPrenomClasseExamen.ai.ml.MlContractDtos;
 import tn.esprit.examen.nomPrenomClasseExamen.analytics.services.FinancialAnalyticsService;
 import tn.esprit.examen.nomPrenomClasseExamen.analytics.services.OperationalAnalyticsService;
+import tn.esprit.examen.nomPrenomClasseExamen.market.services.MlPredictionService;
 import tn.esprit.examen.nomPrenomClasseExamen.weather.services.WeatherRiskService;
 
 import java.time.LocalDate;
@@ -39,6 +41,7 @@ public class GroqAssistantService {
     private final FinancialAnalyticsService financialAnalyticsService;
     private final OperationalAnalyticsService operationalAnalyticsService;
     private final WeatherRiskService weatherRiskService;
+    private final MlPredictionService mlPredictionService;
 
     public ChatResponse chat(ChatRequest request) {
         IntentParsingResult parsed = intentParser.parse(request.getMessage());
@@ -129,18 +132,33 @@ public class GroqAssistantService {
         };
     }
 
+    /**
+     * Routes the chatbot's ML_COST_FORECAST intent through the same canonical
+     * {@link MlPredictionService#predictCost} path the Dashboard AI view uses — full
+     * {@code MonthlyFeatureSnapshot} feature payload plus up to 6 months of history — instead of
+     * independently posting a thin {@code site_id/year/month} payload with an empty history to
+     * Flask (see FIX 4). The response is re-wrapped into the pre-existing
+     * {@code MlPredictionResponse} shape so the chatbot's JSON contract is unchanged.
+     */
     private Object buildMlCostDto(Long siteId, Integer year, Integer month) {
-        MlContractDtos.MlPredictionRequest request = new MlContractDtos.MlPredictionRequest(
-                Map.of("site_id", siteId, "year", year, "month", month),
-                List.of()
-        );
-        MlContractDtos.MlPredictionResponse response = mlAssistantClientService.predictCost(request);
-        return Map.of(
-                "siteId", siteId,
-                "year", year,
-                "month", month,
-                "mlPrediction", response
-        );
+        try {
+            MlPredictionService.CostPredictionResult result = mlPredictionService.predictCost(siteId, year, month);
+            Map<String, Object> predictionEntry = new LinkedHashMap<>();
+            predictionEntry.put("predicted_next_month_cost_eur", result.getPredictedNextMonthCostEur());
+            MlContractDtos.MlPredictionResponse response = new MlContractDtos.MlPredictionResponse(
+                    "OK",
+                    List.of(predictionEntry),
+                    null
+            );
+            return Map.of(
+                    "siteId", siteId,
+                    "year", year,
+                    "month", month,
+                    "mlPrediction", response
+            );
+        } catch (Exception ex) {
+            throw new AssistantDependencyException("ML service unavailable for cost prediction", ex);
+        }
     }
 
     private String buildNaturalAnswer(String question, IntentParsingResult parsed, Object dtoPayload, List<String> suggestions) {

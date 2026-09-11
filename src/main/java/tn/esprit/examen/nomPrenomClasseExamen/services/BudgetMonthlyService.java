@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import tn.esprit.examen.nomPrenomClasseExamen.entities.BudgetMonthly;
 import tn.esprit.examen.nomPrenomClasseExamen.entities.Sites;
+import tn.esprit.examen.nomPrenomClasseExamen.exception.ResourceNotFoundException;
 import tn.esprit.examen.nomPrenomClasseExamen.repositories.BudgetMonthlyRepository;
 import tn.esprit.examen.nomPrenomClasseExamen.repositories.SitesRepository;
 
@@ -18,7 +19,7 @@ public class BudgetMonthlyService {
 
     public BudgetMonthly create(BudgetMonthly budgetMonthly, Long siteId) {
         Sites site = sitesRepository.findById(siteId)
-                .orElseThrow(() -> new RuntimeException("Site not found"));
+                .orElseThrow(() -> ResourceNotFoundException.of("Site", siteId));
         budgetMonthly.setSite(site);
         return budgetMonthlyRepository.save(budgetMonthly);
     }
@@ -33,8 +34,9 @@ public class BudgetMonthlyService {
         b.setCurrencyCode(budgetMonthly.getCurrencyCode());
 
         if (budgetMonthly.getSite() != null && budgetMonthly.getSite().getIdSite() != null) {
-            Sites site = sitesRepository.findById(budgetMonthly.getSite().getIdSite())
-                    .orElseThrow(() -> new RuntimeException("Site not found"));
+            Long siteId = budgetMonthly.getSite().getIdSite();
+            Sites site = sitesRepository.findById(siteId)
+                    .orElseThrow(() -> ResourceNotFoundException.of("Site", siteId));
             b.setSite(site);
         }
 

@@ -24,4 +24,9 @@ public interface IncidentRepository extends JpaRepository<Incident,Long> {
     List<Incident> findByEquipementIdEquipementAndDateBetween(Long equipmentId, Date startDate, Date endDate);
 
     List<Incident> findByEquipementIdEquipement(Long equipmentId);
+
+    // STEP 2A — lightweight dependency checks for delete / attach guards
+    boolean existsBySitesIdSite(Long siteId);
+
+    boolean existsByEquipementIdEquipement(Long equipmentId);
 }

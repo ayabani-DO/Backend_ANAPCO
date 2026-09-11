@@ -20,13 +20,16 @@ import tn.esprit.examen.nomPrenomClasseExamen.analytics.dto.FinancialKpiDTO;
 import tn.esprit.examen.nomPrenomClasseExamen.analytics.dto.OperationalKpiDTO;
 import tn.esprit.examen.nomPrenomClasseExamen.analytics.services.FinancialAnalyticsService;
 import tn.esprit.examen.nomPrenomClasseExamen.analytics.services.OperationalAnalyticsService;
+import tn.esprit.examen.nomPrenomClasseExamen.market.services.MlPredictionService;
 import tn.esprit.examen.nomPrenomClasseExamen.weather.services.WeatherRiskService;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -44,6 +47,7 @@ class GroqAssistantRoutingTest {
     @Mock private FinancialAnalyticsService financialAnalyticsService;
     @Mock private OperationalAnalyticsService operationalAnalyticsService;
     @Mock private WeatherRiskService weatherRiskService;
+    @Mock private MlPredictionService mlPredictionService;
 
     private GroqAssistantService service;
 
@@ -51,7 +55,7 @@ class GroqAssistantRoutingTest {
     void setUp() {
         service = new GroqAssistantService(
                 groqClient, groqProperties, new ObjectMapper(), intentParser, mlAssistantClientService,
-                financialAnalyticsService, operationalAnalyticsService, weatherRiskService);
+                financialAnalyticsService, operationalAnalyticsService, weatherRiskService, mlPredictionService);
         when(groqProperties.getAnswerModel()).thenReturn("model");
         when(groqClient.chatCompletion(any(), any(), any())).thenReturn("natural answer");
     }
@@ -90,5 +94,27 @@ class GroqAssistantRoutingTest {
         assertThat(response.getData()).isSameAs(op);
         assertThat(response.getIntent()).isEqualTo(AssistantIntent.INCIDENT_RISK);
         verifyNoInteractions(financialAnalyticsService);
+    }
+
+    // ── FIX 4: chatbot ML_COST_FORECAST must use the canonical MlPredictionService path ──
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void mlCostForecastIntentDelegatesToCanonicalMlPredictionService() {
+        when(intentParser.parse(anyString())).thenReturn(parsed(AssistantIntent.ML_COST_FORECAST));
+        when(mlPredictionService.predictCost(1L, 2024, 6)).thenReturn(
+                MlPredictionService.CostPredictionResult.builder()
+                        .siteId(1L).year(2024).month(6).predictedNextMonthCostEur(4321.0).build());
+
+        AssistantResponseDto response = service.ask("what will next month cost?");
+
+        // Canonical (rich feature + history) path used — the thin legacy client is never called for this intent.
+        verify(mlPredictionService).predictCost(1L, 2024, 6);
+        verifyNoInteractions(mlAssistantClientService);
+
+        Map<String, Object> data = (Map<String, Object>) response.getData();
+        assertThat(data.get("siteId")).isEqualTo(1L);
+        Object mlPrediction = data.get("mlPrediction");
+        assertThat(mlPrediction).isNotNull();
     }
 }

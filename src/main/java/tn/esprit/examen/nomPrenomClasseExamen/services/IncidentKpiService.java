@@ -444,7 +444,7 @@ public class IncidentKpiService {
 
     private Map<String, Double> calculateCostBySeverity(List<Incident> incidents) {
         return incidents.stream()
-            .filter(i -> i.getCostReal() != null)
+            .filter(i -> i.getCostReal() != null && i.getSeverityCode() != null)
             .collect(Collectors.groupingBy(
                 i -> i.getSeverityCode().toString(),
                 Collectors.summingDouble(Incident::getCostReal)
@@ -527,7 +527,10 @@ public class IncidentKpiService {
     }
 
     private Map<String, Long> calculateIncidentsBySeverity(List<Incident> incidents) {
+        // Legacy incidents may carry a null severity; they are excluded from the severity
+        // breakdown, consistent with the analytics layer (OperationalAnalyticsService).
         return incidents.stream()
+            .filter(i -> i.getSeverityCode() != null)
             .collect(Collectors.groupingBy(
                 i -> i.getSeverityCode().toString(),
                 Collectors.counting()

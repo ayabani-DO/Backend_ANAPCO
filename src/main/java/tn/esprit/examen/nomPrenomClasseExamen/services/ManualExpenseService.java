@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import tn.esprit.examen.nomPrenomClasseExamen.entities.ManualExpense;
 import tn.esprit.examen.nomPrenomClasseExamen.entities.Sites;
+import tn.esprit.examen.nomPrenomClasseExamen.exception.ResourceNotFoundException;
 import tn.esprit.examen.nomPrenomClasseExamen.repositories.ManualExpenseRepository;
 import tn.esprit.examen.nomPrenomClasseExamen.repositories.SitesRepository;
 
@@ -19,7 +20,7 @@ public class ManualExpenseService {
 
     public ManualExpense create(ManualExpense manualExpense, Long siteId) {
         Sites site = sitesRepository.findById(siteId)
-                .orElseThrow(() -> new RuntimeException("Site not found"));
+                .orElseThrow(() -> ResourceNotFoundException.of("Site", siteId));
         manualExpense.setSite(site);
         return manualExpenseRepository.save(manualExpense);
     }
@@ -34,8 +35,9 @@ public class ManualExpenseService {
         m.setCurrencyCode(manualExpense.getCurrencyCode());
 
         if (manualExpense.getSite() != null && manualExpense.getSite().getIdSite() != null) {
-            Sites site = sitesRepository.findById(manualExpense.getSite().getIdSite())
-                    .orElseThrow(() -> new RuntimeException("Site not found"));
+            Long siteId = manualExpense.getSite().getIdSite();
+            Sites site = sitesRepository.findById(siteId)
+                    .orElseThrow(() -> ResourceNotFoundException.of("Site", siteId));
             m.setSite(site);
         }
 

@@ -258,7 +258,7 @@ public class MlPredictionService {
         body.put("history", getHistory(siteId, year, month));
 
         try {
-            Map<String, Object> response = restTemplate.postForObject(mlServiceBaseUrl + "/explain/cost", body, Map.class);
+            Map<String, Object> response = restTemplate.postForObject(mlServiceBaseUrl + "/api/v1/explain/cost", body, Map.class);
             return response != null ? response : Map.of("status", "ERROR", "error", "Empty response");
         } catch (Exception e) {
             return Map.of("status", "ERROR", "error", e.getMessage());

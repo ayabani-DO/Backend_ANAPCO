@@ -1,6 +1,7 @@
 package tn.esprit.examen.nomPrenomClasseExamen.exception;
 
 import jakarta.mail.MessagingException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -106,6 +107,30 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, Object>> handleMessaging(MessagingException ex) {
         return build(HttpStatus.BAD_GATEWAY,
                 "The email could not be sent. Please check the mail configuration and try again.");
+    }
+
+    // ── Operational domain integrity (STEP 2A) ─────────────────────────────
+
+    /** A referenced entity id does not exist. */
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleResourceNotFound(ResourceNotFoundException ex) {
+        return build(HttpStatus.NOT_FOUND, ex.getMessage());
+    }
+
+    /** A delete (or similar operation) is blocked because dependent records still exist. */
+    @ExceptionHandler(DependencyExistsException.class)
+    public ResponseEntity<Map<String, Object>> handleDependencyExists(DependencyExistsException ex) {
+        return build(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
+    /**
+     * Database-level integrity failure (e.g. a foreign-key constraint on a delete that the
+     * service-level guard did not catch). Surfaced as a controlled 409 rather than a raw 500.
+     */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<Map<String, Object>> handleDataIntegrity(DataIntegrityViolationException ex) {
+        return build(HttpStatus.CONFLICT,
+                "The operation conflicts with existing related records and cannot be completed");
     }
 
     // ── Request shape ──────────────────────────────────────────────────────

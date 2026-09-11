@@ -25,7 +25,9 @@ public class CategorieEquipement {
     
     private Boolean active = true;
 
-    @OneToMany(mappedBy = "categorie", cascade = CascadeType.ALL)
+    // Cascade limited to PERSIST/MERGE: deleting a category must never destroy the
+    // Equipement records that reference it (see CategorieEquipementService delete guard, STEP 2A).
+    @OneToMany(mappedBy = "categorie", cascade = {CascadeType.PERSIST, CascadeType.MERGE})
     @JsonIgnoreProperties("categorie")
     private Set<Equipement> equipements;
 }

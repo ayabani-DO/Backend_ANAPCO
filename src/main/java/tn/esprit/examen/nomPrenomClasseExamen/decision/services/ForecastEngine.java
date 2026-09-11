@@ -14,10 +14,17 @@ import java.util.List;
 /**
  * Decision Layer — short-term cost forecast. It receives the financial and operational KPIs from the
  * Analytics Layer and projects them; it does not recompute any cost or budget.
+ *
+ * <p>{@code nextMonthCostForecast} is a deterministic baseline: the average of the most recent
+ * available months of actual {@code totalRealCost} from the year cost trend (never the budget, and
+ * never fabricated when there is no history — see {@link #recentHistoryForecast}).
  */
 @Service
 @RequiredArgsConstructor
 public class ForecastEngine {
+
+    /** How many of the most recent months (with actual data) feed the baseline average. */
+    private static final int RECENT_MONTHS_WINDOW = 3;
 
     private final OperationalAnalyticsService operationalAnalytics;
     private final FinancialAnalyticsService financialAnalytics;
@@ -64,12 +71,33 @@ public class ForecastEngine {
                 .siteId(siteId)
                 .year(year)
                 .month(month)
-                .nextMonthCostForecast(financial.getForecastNextMonth())
+                .nextMonthCostForecast(recentHistoryForecast(trend, month))
                 .trendDirection(trendDirection)
                 .trendPercent(trendPercent)
                 .confidence(confidence)
                 .drivers(drivers)
                 .build();
+    }
+
+    /**
+     * Deterministic baseline forecast = average of the last {@link #RECENT_MONTHS_WINDOW} months
+     * (walking back from {@code month}) that carry actual historical cost data. Fewer available
+     * months simply shrink the average; zero available months returns {@code null} rather than a
+     * fabricated 0. Budget is never consulted here.
+     */
+    private Double recentHistoryForecast(List<FinancialKpiDTO.MonthlyCost> trend, int month) {
+        if (trend == null) return null;
+        List<Double> recentActuals = new ArrayList<>();
+        for (int m = month; m >= 1 && recentActuals.size() < RECENT_MONTHS_WINDOW; m--) {
+            double v = monthValue(trend, m);
+            if (v > 0) {
+                recentActuals.add(v);
+            }
+        }
+        if (recentActuals.isEmpty()) return null;
+        double sum = 0;
+        for (double v : recentActuals) sum += v;
+        return round2(sum / recentActuals.size());
     }
 
     /** Reads the cost trend for a given month (1..12); the trend is an ordered 12-point series. */

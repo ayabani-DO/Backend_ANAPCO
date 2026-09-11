@@ -1,6 +1,6 @@
 package tn.esprit.examen.nomPrenomClasseExamen.entities;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.*;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -35,8 +35,11 @@ public class Maintenance {
     private Double costReal;
 
 
+    // Bound the relation (both directions): the client sends {"idEquipement": <id>} on
+    // create/update and the service resolves the managed Equipement server-side; on response the
+    // equipment's own back-reference collection is omitted so the JSON stays finite.
     @ManyToOne
-    @JsonIgnore
+    @JsonIgnoreProperties("maintenances")
     @JoinColumn(name = "equipement_id")
     private Equipement equipement;
 

@@ -12,4 +12,7 @@ public interface ManualExpenseRepository extends JpaRepository<ManualExpense, Lo
     List<ManualExpense> findBySite_IdSite(Long siteId);
 
     List<ManualExpense> findBySite_IdSiteAndDateBetween(Long siteId, LocalDate start, LocalDate end);
+
+    // STEP 2A — lightweight dependency check for the Site delete guard
+    boolean existsBySite_IdSite(Long siteId);
 }

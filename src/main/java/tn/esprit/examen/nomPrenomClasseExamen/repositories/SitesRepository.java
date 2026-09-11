@@ -10,4 +10,7 @@ public interface SitesRepository extends JpaRepository<Sites,Long> {
     
     @Query("SELECT COUNT(s) FROM Sites s WHERE s.countryCode = ?1")
     long countByCountryCode(String countryCode);
+
+    // STEP 2A / codeRef — service-level uniqueness check for the auto-generated business identifier
+    boolean existsByCodeRef(String codeRef);
 }

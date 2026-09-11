@@ -29,4 +29,7 @@ public interface MaintenanceRepository extends JpaRepository<Maintenance,Long> {
     List<Maintenance> findByEquipementSiteIdSite(Long siteId);
 
     List<Maintenance> findByEquipementSiteIdSiteAndDateBetween(Long siteId, Date startDate, Date endDate);
+
+    // STEP 2A — lightweight dependency check for the Equipement delete guard
+    boolean existsByEquipementIdEquipement(Long equipementId);
 }

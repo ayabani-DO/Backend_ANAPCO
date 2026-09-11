@@ -70,7 +70,7 @@ class DashboardServiceTest {
     void financialViewAddsForecastAndRiskLevel() {
         FinancialKpiDTO fin = FinancialKpiDTO.builder().budget(1000).real(1200).variancePercent(20.0).build();
         OperationalKpiDTO op = OperationalKpiDTO.builder().criticalIncidentCount(0).build();
-        ForecastDTO forecast = ForecastDTO.builder().trendDirection("RISING").nextMonthCostForecast(1300).build();
+        ForecastDTO forecast = ForecastDTO.builder().trendDirection("RISING").nextMonthCostForecast(1300.0).build();
 
         when(financialAnalytics.getFinancialKpi(1L, 2024, 6)).thenReturn(fin);
         when(operationalAnalytics.getOperationalKpi(1L, 2024, 6)).thenReturn(op);

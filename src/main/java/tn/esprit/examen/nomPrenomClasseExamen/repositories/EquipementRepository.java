@@ -16,4 +16,14 @@ public interface EquipementRepository extends JpaRepository<Equipement,Long> {
     List<Equipement> findByCategorieNomEquiepment(String categorieNom);
 
     List<Equipement> findBySiteIdSite(Long siteId);
+
+    // STEP 2A — lightweight dependency checks for delete guards
+    boolean existsBySiteIdSite(Long siteId);
+
+    boolean existsByCategorieIdCategorie(Long categorieId);
+
+    // refEquipement generation — per-site sequence + uniqueness check for the auto-generated reference
+    long countBySiteIdSite(Long siteId);
+
+    boolean existsByRefEquipement(String refEquipement);
 }
